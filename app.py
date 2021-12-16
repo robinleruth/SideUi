@@ -178,13 +178,6 @@ class ToolBar(Frame):
     def __init__(self, parent):
         Frame.__init__(self, parent)
         Label(self, text='Toolbar').pack()
-        self.entry = Entry(self)
-        self.entry.pack()
-        Button(self, text='Send event', command=self.send_event).pack()
-
-    def send_event(self):
-        msg = StrFromUi(self.entry.get())
-        ui_out_queue.put(msg)
 
 
 class StatusBar(Frame):
@@ -209,6 +202,13 @@ class TV(Frame):
     def __init__(self, parent):
         Frame.__init__(self, parent)
         Label(self, text='TreeView').pack()
+        self.entry = Entry(self)
+        self.entry.pack()
+        Button(self, text='Send event', command=self.send_event).pack()
+
+    def send_event(self):
+        msg = StrFromUi(self.entry.get())
+        ui_out_queue.put(msg)
 
 
 class Main(Frame):
