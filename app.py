@@ -250,7 +250,16 @@ class App(Tk):
         self.geometry('300x300')
 
 
-if __name__ == '__main__':
+def launch_ui():
     r = App()
     Main(r).pack(side='top', fill='both', expand=True)
     r.mainloop()
+
+
+if __name__ == '__main__':
+    t1 = Thread(target=launch_ui)
+    t2 = Thread(target=launch_ui)
+    t1.start()
+    t2.start()
+    t1.join()
+    t2.join()
