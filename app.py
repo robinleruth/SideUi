@@ -4,11 +4,14 @@ import queue
 
 from queue import Queue
 from threading import Thread
+from tkinter import ttk
 from typing import List, Dict, Any, Type
 from tkinter import *
 
 ui_queues: List[Queue] = []
 ui_out_queue = Queue()
+
+NORM_FONT = ("Helvetica", 10)
 
 
 # ================= EVENT =================
@@ -224,9 +227,21 @@ class Main(Frame):
         container.pack(side='right', fill='both', expand=True)
         container.grid_rowconfigure(0, weight=1)
         container.grid_columnconfigure(0, weight=1)
-
         self.main_content.grid(row=0, column=0, sticky='nsew')
         self.tview.grid(row=0, column=0, sticky='nsew')
+
+        menubar = Menu(container)
+        filemenu = Menu(menubar, tearoff=0)
+        filemenu.add_command(label='New window', command=launch_daemon)
+        filemenu.add_separator()
+        filemenu.add_command(label='Exit', command=quit)
+        menubar.add_cascade(label='File', menu=filemenu)
+
+        helpmenu = Menu(menubar, tearoff=0)
+        helpmenu.add_command(label='?', command=lambda: popupmsg('Not supported just yet'))
+        menubar.add_cascade(label='Help', menu=helpmenu)
+
+        Tk.config(self.master, menu=menubar)
 
         self.frames = {}
         for f in zip(('Main', 'TreeView'), (self.main_content, self.tview)):
@@ -265,10 +280,27 @@ def launch_ui():
     r.mainloop()
 
 
+def launch_daemon():
+    t = Thread(target=launch_ui)
+    t.daemon = True
+    t.start()
+
+
+def popupmsg(msg):
+    popup = Tk()
+
+    def leavemini():
+        popup.destroy()
+
+    popup.wm_title("!")
+
+    label = ttk.Label(popup, text=msg, font=NORM_FONT)
+    label.pack(side="top", fill="x", pady=10)
+    B1 = ttk.Button(popup, text="Okay", command=leavemini)
+    B1.pack()
+
+    popup.mainloop()
+
+
 if __name__ == '__main__':
-    t1 = Thread(target=launch_ui)
-    t2 = Thread(target=launch_ui)
-    t1.start()
-    t2.start()
-    t1.join()
-    t2.join()
+    launch_ui()
