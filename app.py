@@ -214,13 +214,25 @@ class Main(Frame):
         self.statusbar = StatusBar(self)
         self.toolbar = ToolBar(self)
         self.navbar = NavBar(self)
-        self.main_content = MainContent(self)
-        self.tview = TV(self)
+        container = Frame(self, width=400, height=400)
+        self.main_content = MainContent(container)
+        self.tview = TV(container)
 
         self.statusbar.pack(side='bottom', fill='x')
         self.toolbar.pack(side='top', fill='x')
         self.navbar.pack(side='left', fill='y')
-        self.main_content.pack(side='right', fill='both', expand=True)
+        container.pack(side='right', fill='both', expand=True)
+        container.grid_rowconfigure(0, weight=1)
+        container.grid_columnconfigure(0, weight=1)
+
+        self.main_content.grid(row=0, column=0, sticky='nsew')
+        self.tview.grid(row=0, column=0, sticky='nsew')
+
+        self.frames = {}
+        for f in zip(('Main', 'TreeView'), (self.main_content, self.tview)):
+            self.frames[f[0]] = f[1]
+
+        self.switch_main('Main')
 
         self.master.after(100, self.process_queue)
 
@@ -234,12 +246,9 @@ class Main(Frame):
         self.master.after(100, self.process_queue)
 
     def switch_main(self, value):
-        if value == 'Main':
-            self.main_content.pack(side='right', fill='both', expand=True)
-            self.tview.pack_forget()
-        elif value == 'TreeView':
-            self.tview.pack(side='right', fill='both', expand=True)
-            self.main_content.pack_forget()
+        frame = self.frames.get(value)
+        if frame is not None:
+            frame.tkraise()
 
 
 class App(Tk):
