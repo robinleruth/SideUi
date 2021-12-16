@@ -156,7 +156,7 @@ class NavBar(Frame):
         Frame.__init__(self, parent)
         self.parent = parent
         Label(self, text='Navbar').pack()
-        self.var = IntVar()
+        self.var = IntVar(master=self)
         Radiobutton(self, text='Main', variable=self.var, value=1, command=self.test).pack()
         Radiobutton(self, text='TreeView', variable=self.var, value=2, command=self.test).pack()
         self.var.set(1)
@@ -187,7 +187,7 @@ class ToolBar(Frame):
 class StatusBar(Frame):
     def __init__(self, parent):
         Frame.__init__(self, parent)
-        self.var = StringVar(value='Launching...')
+        self.var = StringVar(master=self, value='Launching...')
         self.label = Label(self, textvariable=self.var)
         self.label.pack()
         self.set('Ready')
