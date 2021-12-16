@@ -157,12 +157,18 @@ class NavBar(Frame):
         self.parent = parent
         Label(self, text='Navbar').pack()
         self.var = IntVar()
-        Radiobutton(self, text='test1', variable=self.var, value=1, command=self.test).pack()
-        Radiobutton(self, text='test2', variable=self.var, value=2, command=self.test).pack()
+        Radiobutton(self, text='Main', variable=self.var, value=1, command=self.test).pack()
+        Radiobutton(self, text='TreeView', variable=self.var, value=2, command=self.test).pack()
         self.var.set(1)
+
+        self.lookup = {
+            1: 'Main',
+            2: 'TreeView'
+        }
 
     def test(self):
         self.parent.statusbar.set(self.var.get())
+        self.parent.switch_main(self.lookup[self.var.get()])
 
 
 class ToolBar(Frame):
@@ -196,6 +202,12 @@ class MainContent(Frame):
         Label(self, text='Main content').pack()
 
 
+class TV(Frame):
+    def __init__(self, parent):
+        Frame.__init__(self, parent)
+        Label(self, text='TreeView').pack()
+
+
 class Main(Frame):
     def __init__(self, parent):
         Frame.__init__(self, parent)
@@ -203,6 +215,7 @@ class Main(Frame):
         self.toolbar = ToolBar(self)
         self.navbar = NavBar(self)
         self.main_content = MainContent(self)
+        self.tview = TV(self)
 
         self.statusbar.pack(side='bottom', fill='x')
         self.toolbar.pack(side='top', fill='x')
@@ -219,6 +232,14 @@ class Main(Frame):
             elif type(message) == StrFromUi:
                 Label(self.main_content, text=message.message).pack()
         self.master.after(100, self.process_queue)
+
+    def switch_main(self, value):
+        if value == 'Main':
+            self.main_content.pack(side='right', fill='both', expand=True)
+            self.tview.pack_forget()
+        elif value == 'TreeView':
+            self.tview.pack(side='right', fill='both', expand=True)
+            self.main_content.pack_forget()
 
 
 class App(Tk):
