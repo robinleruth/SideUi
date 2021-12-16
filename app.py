@@ -159,6 +159,7 @@ class NavBar(Frame):
         self.var = IntVar()
         Radiobutton(self, text='test1', variable=self.var, value=1, command=self.test).pack()
         Radiobutton(self, text='test2', variable=self.var, value=2, command=self.test).pack()
+        self.var.set(1)
 
     def test(self):
         self.parent.statusbar.set(self.var.get())
@@ -168,10 +169,12 @@ class ToolBar(Frame):
     def __init__(self, parent):
         Frame.__init__(self, parent)
         Label(self, text='Toolbar').pack()
+        self.entry = Entry(self)
+        self.entry.pack()
         Button(self, text='Send event', command=self.send_event).pack()
 
     def send_event(self):
-        msg = StrFromUi("test from one window")
+        msg = StrFromUi(self.entry.get())
         ui_out_queue.put(msg)
 
 
@@ -181,6 +184,7 @@ class StatusBar(Frame):
         self.var = StringVar(value='Launching...')
         self.label = Label(self, textvariable=self.var)
         self.label.pack()
+        self.set('Ready')
 
     def set(self, value):
         self.var.set(str(value))
