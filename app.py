@@ -159,13 +159,13 @@ class ServerWorker(Worker):
         message = data.decode()
         addr = writer.get_extra_info('peername')
 
-        print(f'Received {message!r} from {addr!r}')
+        # print(f'Received {message!r} from {addr!r}')
         ui_out_queue.put(MessageFromPeer(addr[0] + ':' + str(addr[1]), message))
-        print(f'Send {message!r}')
+        # print(f'Send {message!r}')
         writer.write(data)
         await writer.drain()
 
-        print('Close connection')
+        # print('Close connection')
         writer.close()
 
 
@@ -177,13 +177,13 @@ class MessageToPeerWorker(Worker):
         server, port = message.server.split(':')
         reader, writer = await asyncio.open_connection(server, int(port))
 
-        print(f'Send {message!r}')
+        # print(f'Send {message!r}')
         writer.write(message.message.encode())
 
         data = await reader.read(100)
-        print(f'Received {data.decode()!r}')
+        # print(f'Received {data.decode()!r}')
 
-        print('Close connection')
+        # print('Close connection')
         writer.close()
 
         return StrFromUi('Message sent !')
@@ -322,6 +322,9 @@ class ServerFrame(Frame):
         ui_out_queue.put(event)
 
 
+messages_by_peers: Dict[str, List[str]] = {}
+
+
 class PeerToPeerFrame(Frame):
     def __init__(self, parent):
         Frame.__init__(self, parent)
@@ -335,8 +338,46 @@ class PeerToPeerFrame(Frame):
         self.msg_entry.pack()
         Button(self, text='Send msg', command=self.send_msg).pack()
 
+        self.menubar = Frame(self)
+        self.menubar.pack()
+
+        self.container = Frame(self)
+        self.container.pack()
+        self.container.grid_rowconfigure(0, weight=1)
+        self.container.grid_columnconfigure(0, weight=1)
+
+        self.messages_thread_by_addr = {}
+
+        for addr in messages_by_peers:
+            if addr not in self.messages_thread_by_addr:
+                f = Frame(self.container)
+                self.messages_thread_by_addr[addr] = f
+                f.grid(row=0, column=0, sticky='nsew')
+                Button(self.menubar, text=addr, command=lambda x=addr: self.switch(x)).pack(side=LEFT)
+            messages = messages_by_peers[addr]
+            for message in messages:
+                Label(self.messages_thread_by_addr[addr], text=message).pack()
+
     def send_msg(self):
+        if self.addr.get() not in self.messages_thread_by_addr:
+            f = Frame(self.container)
+            self.messages_thread_by_addr[self.addr.get()] = f
+            f.grid(row=0, column=0, sticky='nsew')
+            Button(self.menubar, text=self.addr.get(), command=lambda x=self.addr.get(): self.switch(x)).pack(side=LEFT)
+            messages_by_peers[self.addr.get()] = []
         ui_out_queue.put(MessageToPeer(self.addr.get(), self.msg.get()))
+        f = self.messages_thread_by_addr[self.addr.get()]
+        Label(f, text=self.msg.get()).pack()
+        messages_by_peers[self.addr.get()].append(self.msg.get())
+        f.tkraise()
+
+    def switch(self, value):
+        f = self.messages_thread_by_addr.get(value)
+        if f is not None:
+            f.tkraise()
+
+    def get_msg(self):
+        pass
 
 
 class Main(Frame):
