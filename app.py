@@ -41,6 +41,23 @@ class StrFromUi(Event):
         return self.message
 
 
+class CreateServerEvent(Event):
+    def __init__(self, port) -> None:
+        self.port = port
+
+    @staticmethod
+    def get_repr():
+        return 'CREATE_SERVER'
+
+    def __repr__(self):
+        return f'CREATE_SERVER On {self.port}'
+
+
+class ServerCreatedEvent:
+    def __init__(self, message) -> None:
+        self.message = message
+
+
 # ================= WORKERS =================
 
 
@@ -96,9 +113,42 @@ class StrFromUiWorker(Worker):
         return message
 
 
+class ServerWorker(Worker):
+    def get_type(self) -> Type[Event]:
+        return CreateServerEvent
+
+    async def _process_message(self, message: CreateServerEvent) -> Any:
+        port = message.port
+        server = await asyncio.start_server(self._handle_msg, '127.0.0.1', port)
+        addr = server.sockets[0].getsockname()
+        print(f'Serving on {addr}')
+
+        async def serve():
+            async with server:
+                await server.serve_forever()
+
+        loop = asyncio.get_event_loop()
+        loop.create_task(serve())
+
+        return ServerCreatedEvent(f'Serving on {addr}')
+
+    async def _handle_msg(self, reader, writer):
+        data = await reader.read(100)
+        message = data.decode()
+        addr = writer.get_extra_info('peername')
+
+        print(f'Received {message!r} from {addr!r}')
+        print(f'Send {message!r}')
+        writer.write(data)
+        await writer.drain()
+
+        print('Close connection')
+        writer.close()
+
+
 # ================= SET UP =================
 
-workers: List[Worker] = [RandomSubscriber(ui_queues), StrFromUiWorker(ui_queues)]
+workers: List[Worker] = [RandomSubscriber(ui_queues), StrFromUiWorker(ui_queues), ServerWorker(ui_queues)]
 workers_by_type: Dict[str, List[Worker]] = dict()
 
 
@@ -162,11 +212,13 @@ class NavBar(Frame):
         self.var = IntVar(master=self)
         Radiobutton(self, text='Main', variable=self.var, value=1, command=self.test).pack()
         Radiobutton(self, text='TreeView', variable=self.var, value=2, command=self.test).pack()
+        Radiobutton(self, text='Server', variable=self.var, value=3, command=self.test).pack()
         self.var.set(1)
 
         self.lookup = {
             1: 'Main',
-            2: 'TreeView'
+            2: 'TreeView',
+            3: 'Server'
         }
 
     def test(self):
@@ -211,6 +263,20 @@ class TV(Frame):
         ui_out_queue.put(msg)
 
 
+class ServerFrame(Frame):
+    def __init__(self, parent):
+        Frame.__init__(self, parent)
+        Label(self, text='Choose port').pack()
+        self.port = StringVar(master=self)
+        self.entry = Entry(self, textvariable=self.port)
+        self.entry.pack()
+        Button(self, text='Create server', command=self.create_server).pack()
+
+    def create_server(self):
+        event = CreateServerEvent(self.port.get())
+        ui_out_queue.put(event)
+
+
 class Main(Frame):
     def __init__(self, parent):
         Frame.__init__(self, parent)
@@ -220,6 +286,7 @@ class Main(Frame):
         container = Frame(self, width=400, height=400)
         self.main_content = MainContent(container)
         self.tview = TV(container)
+        self.server_frame = ServerFrame(container)
 
         self.statusbar.pack(side='bottom', fill='x')
         self.toolbar.pack(side='top', fill='x')
@@ -229,6 +296,7 @@ class Main(Frame):
         container.grid_columnconfigure(0, weight=1)
         self.main_content.grid(row=0, column=0, sticky='nsew')
         self.tview.grid(row=0, column=0, sticky='nsew')
+        self.server_frame.grid(row=0, column=0, sticky='nsew')
 
         menubar = Menu(container)
         filemenu = Menu(menubar, tearoff=0)
@@ -244,7 +312,7 @@ class Main(Frame):
         Tk.config(self.master, menu=menubar)
 
         self.frames = {}
-        for f in zip(('Main', 'TreeView'), (self.main_content, self.tview)):
+        for f in zip(('Main', 'TreeView', 'Server'), (self.main_content, self.tview, self.server_frame)):
             self.frames[f[0]] = f[1]
 
         self.switch_main('Main')
@@ -258,6 +326,8 @@ class Main(Frame):
                 Label(self.main_content, text=message).pack()
             elif type(message) == StrFromUi:
                 Label(self.main_content, text=message.message).pack()
+            elif type(message) == ServerCreatedEvent:
+                Label(self.server_frame, text=message.message).pack()
         self.master.after(100, self.process_queue)
 
     def switch_main(self, value):
