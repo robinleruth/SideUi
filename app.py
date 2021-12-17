@@ -74,7 +74,7 @@ class RandomSubscriber(Worker):
     async def _get_from_source(self):
         while True:
             await self.tell('Ok')
-            await asyncio.sleep(3)
+            await asyncio.sleep(10)
 
     async def start(self):
         loop = asyncio.get_event_loop()
