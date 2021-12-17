@@ -58,6 +58,25 @@ class ServerCreatedEvent:
         self.message = message
 
 
+class MessageFromPeer(StrFromUi):
+    def __init__(self, server, message) -> None:
+        self.server = server
+        super().__init__(message)
+
+
+class MessageToPeer(Event):
+    def __init__(self, server, message) -> None:
+        self.server: str = server
+        self.message: str = message
+
+    @staticmethod
+    def get_repr():
+        return 'MESSAGE TO PEER'
+
+    def __repr__(self):
+        return self.message + ' -> ' + self.server
+
+
 # ================= WORKERS =================
 
 
@@ -74,9 +93,12 @@ class Worker(metaclass=abc.ABCMeta):
         while True:
             message = await self.in_queue.get()
             print(f'{message} received in {self.get_type().get_repr()}')
-            result = await self._process_message(message)
-            for q in self.queues:
-                q.put(result)
+            try:
+                result = await self._process_message(message)
+                for q in self.queues:
+                    q.put(result)
+            except Exception as e:
+                print('ERROR : ', e)
 
     @abc.abstractmethod
     def get_type(self) -> Type[Event]:
@@ -138,6 +160,7 @@ class ServerWorker(Worker):
         addr = writer.get_extra_info('peername')
 
         print(f'Received {message!r} from {addr!r}')
+        ui_out_queue.put(MessageFromPeer(addr[0] + ':' + str(addr[1]), message))
         print(f'Send {message!r}')
         writer.write(data)
         await writer.drain()
@@ -146,9 +169,29 @@ class ServerWorker(Worker):
         writer.close()
 
 
+class MessageToPeerWorker(Worker):
+    def get_type(self) -> Type[Event]:
+        return MessageToPeer
+
+    async def _process_message(self, message: MessageToPeer) -> Any:
+        server, port = message.server.split(':')
+        reader, writer = await asyncio.open_connection(server, int(port))
+
+        print(f'Send {message!r}')
+        writer.write(message.message.encode())
+
+        data = await reader.read(100)
+        print(f'Received {data.decode()!r}')
+
+        print('Close connection')
+        writer.close()
+
+        return StrFromUi('Message sent !')
+
+
 # ================= SET UP =================
 
-workers: List[Worker] = [RandomSubscriber(ui_queues), StrFromUiWorker(ui_queues), ServerWorker(ui_queues)]
+workers: List[Worker] = [RandomSubscriber(ui_queues), StrFromUiWorker(ui_queues), ServerWorker(ui_queues), MessageToPeerWorker(ui_queues)]
 workers_by_type: Dict[str, List[Worker]] = dict()
 
 
@@ -213,12 +256,14 @@ class NavBar(Frame):
         Radiobutton(self, text='Main', variable=self.var, value=1, command=self.test).pack()
         Radiobutton(self, text='TreeView', variable=self.var, value=2, command=self.test).pack()
         Radiobutton(self, text='Server', variable=self.var, value=3, command=self.test).pack()
+        Radiobutton(self, text='Peer to peer', variable=self.var, value=4, command=self.test).pack()
         self.var.set(1)
 
         self.lookup = {
             1: 'Main',
             2: 'TreeView',
-            3: 'Server'
+            3: 'Server',
+            4: 'Peer to peer'
         }
 
     def test(self):
@@ -277,6 +322,23 @@ class ServerFrame(Frame):
         ui_out_queue.put(event)
 
 
+class PeerToPeerFrame(Frame):
+    def __init__(self, parent):
+        Frame.__init__(self, parent)
+        Label(self, text='Choose server:port').pack()
+        self.addr = StringVar(master=self)
+        self.server_entry = Entry(self, textvariable=self.addr)
+        self.server_entry.pack()
+        Label(self, text='Message to send :').pack()
+        self.msg = StringVar(master=self)
+        self.msg_entry = Entry(self, textvariable=self.msg)
+        self.msg_entry.pack()
+        Button(self, text='Send msg', command=self.send_msg).pack()
+
+    def send_msg(self):
+        ui_out_queue.put(MessageToPeer(self.addr.get(), self.msg.get()))
+
+
 class Main(Frame):
     def __init__(self, parent):
         Frame.__init__(self, parent)
@@ -287,6 +349,7 @@ class Main(Frame):
         self.main_content = MainContent(container)
         self.tview = TV(container)
         self.server_frame = ServerFrame(container)
+        self.peer_to_peer = PeerToPeerFrame(container)
 
         self.statusbar.pack(side='bottom', fill='x')
         self.toolbar.pack(side='top', fill='x')
@@ -297,6 +360,7 @@ class Main(Frame):
         self.main_content.grid(row=0, column=0, sticky='nsew')
         self.tview.grid(row=0, column=0, sticky='nsew')
         self.server_frame.grid(row=0, column=0, sticky='nsew')
+        self.peer_to_peer.grid(row=0, column=0, sticky='nsew')
 
         menubar = Menu(container)
         filemenu = Menu(menubar, tearoff=0)
@@ -312,7 +376,7 @@ class Main(Frame):
         Tk.config(self.master, menu=menubar)
 
         self.frames = {}
-        for f in zip(('Main', 'TreeView', 'Server'), (self.main_content, self.tview, self.server_frame)):
+        for f in zip(('Main', 'TreeView', 'Server', 'Peer to peer'), (self.main_content, self.tview, self.server_frame, self.peer_to_peer)):
             self.frames[f[0]] = f[1]
 
         self.switch_main('Main')
@@ -328,6 +392,9 @@ class Main(Frame):
                 Label(self.main_content, text=message.message).pack()
             elif type(message) == ServerCreatedEvent:
                 Label(self.server_frame, text=message.message).pack()
+            elif type(message) == MessageFromPeer:
+                m = 'FROM ' + message.server + ' -> ' + message.message
+                Label(self.server_frame, text=m).pack()
         self.master.after(100, self.process_queue)
 
     def switch_main(self, value):
