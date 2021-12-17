@@ -372,6 +372,7 @@ class Main(Frame):
         helpmenu = Menu(menubar, tearoff=0)
         helpmenu.add_command(label='?', command=lambda: popupmsg('Not supported just yet'))
         menubar.add_cascade(label='Help', menu=helpmenu)
+        menubar.add_command(label='New window', command=launch_daemon)
 
         Tk.config(self.master, menu=menubar)
 
