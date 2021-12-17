@@ -191,7 +191,7 @@ class MessageToPeerWorker(Worker):
 
 # ================= SET UP =================
 
-workers: List[Worker] = [RandomSubscriber(ui_queues), StrFromUiWorker(ui_queues), ServerWorker(ui_queues), MessageToPeerWorker(ui_queues)]
+workers: List[Worker] = [StrFromUiWorker(ui_queues), ServerWorker(ui_queues), MessageToPeerWorker(ui_queues)]
 workers_by_type: Dict[str, List[Worker]] = dict()
 
 
@@ -396,6 +396,7 @@ class Main(Frame):
             elif type(message) == MessageFromPeer:
                 m = 'FROM ' + message.server + ' -> ' + message.message
                 Label(self.server_frame, text=m).pack()
+                Label(self.main_content, text=m).pack()
         self.master.after(100, self.process_queue)
 
     def switch_main(self, value):
