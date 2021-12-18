@@ -210,11 +210,11 @@ dispatcher_queue = asyncio.Queue()
 async def populate_queue():
     print("populate_queue")
     while True:
-        try:
+        if not ui_out_queue.empty():
             alert = ui_out_queue.get_nowait()
             await dispatcher_queue.put(alert)
-        except queue.Empty:
-            await asyncio.sleep(1)
+        else:
+            await asyncio.sleep(0.5)
 
 
 async def dispatcher():
