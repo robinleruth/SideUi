@@ -191,7 +191,11 @@ class MessageToPeerWorker(Worker):
 
 # ================= SET UP =================
 
-workers: List[Worker] = [StrFromUiWorker(ui_queues), ServerWorker(ui_queues), MessageToPeerWorker(ui_queues)]
+workers: List[Worker] = [
+    StrFromUiWorker(ui_queues),
+    ServerWorker(ui_queues),
+    MessageToPeerWorker(ui_queues)
+]
 workers_by_type: Dict[str, List[Worker]] = dict()
 
 
@@ -238,11 +242,6 @@ def process_message_from_ui():
     loop.create_task(dispatcher())
 
     loop.run_forever()
-
-
-get_message_thread = Thread(target=process_message_from_ui)
-get_message_thread.daemon = True
-get_message_thread.start()
 
 
 # ================= UI =================
@@ -492,5 +491,8 @@ def popupmsg(msg):
 
 
 if __name__ == '__main__':
+    get_message_thread = Thread(target=process_message_from_ui)
+    get_message_thread.daemon = True
+    get_message_thread.start()
     ui_out_queue.put(CreateServerEvent('8888'))
     launch_ui()
