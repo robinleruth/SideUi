@@ -366,6 +366,8 @@ class PeerToPeerFrame(Frame):
         f = self.messages_thread_by_addr.get(value)
         if f is not None:
             f.tkraise()
+            self.addr.set(value + ':8888')
+            self.msg.set('')
 
     def get_msg(self, addr, msg):
         port = None
@@ -490,4 +492,5 @@ def popupmsg(msg):
 
 
 if __name__ == '__main__':
+    ui_out_queue.put(CreateServerEvent('8888'))
     launch_ui()
