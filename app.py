@@ -253,10 +253,10 @@ class NavBar(Frame):
         self.parent = parent
         Label(self, text='Navbar').pack()
         self.var = IntVar(master=self)
-        Radiobutton(self, text='Main', variable=self.var, value=1, command=self.test).pack()
-        Radiobutton(self, text='TreeView', variable=self.var, value=2, command=self.test).pack()
-        Radiobutton(self, text='Server', variable=self.var, value=3, command=self.test).pack()
-        Radiobutton(self, text='Peer to peer', variable=self.var, value=4, command=self.test).pack()
+        Radiobutton(self, text='Main', variable=self.var, value=1, command=self.switch).pack()
+        Radiobutton(self, text='TreeView', variable=self.var, value=2, command=self.switch).pack()
+        Radiobutton(self, text='Server', variable=self.var, value=3, command=self.switch).pack()
+        Radiobutton(self, text='Peer to peer', variable=self.var, value=4, command=self.switch).pack()
         self.var.set(1)
 
         self.lookup = {
@@ -266,7 +266,7 @@ class NavBar(Frame):
             4: 'Peer to peer'
         }
 
-    def test(self):
+    def switch(self):
         self.parent.statusbar.set(self.var.get())
         self.parent.switch_main(self.lookup[self.var.get()])
 
@@ -458,6 +458,7 @@ class App(Tk):
         self.queue = Queue()
         ui_queues.append(self.queue)
         self.geometry('300x300')
+        self.wm_title('Side')
 
 
 def launch_ui():
