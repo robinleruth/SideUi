@@ -141,7 +141,7 @@ class ServerWorker(Worker):
 
     async def _process_message(self, message: CreateServerEvent) -> Any:
         port = message.port
-        server = await asyncio.start_server(self._handle_msg, '127.0.0.1', port)
+        server = await asyncio.start_server(self._handle_msg, '0.0.0.0', port)
         addr = server.sockets[0].getsockname()
         print(f'Serving on {addr}')
 
@@ -359,25 +359,30 @@ class PeerToPeerFrame(Frame):
                 Label(self.messages_thread_by_addr[addr], text=message).pack()
 
     def send_msg(self):
-        if self.addr.get() not in self.messages_thread_by_addr:
-            f = Frame(self.container)
-            self.messages_thread_by_addr[self.addr.get()] = f
-            f.grid(row=0, column=0, sticky='nsew')
-            Button(self.menubar, text=self.addr.get(), command=lambda x=self.addr.get(): self.switch(x)).pack(side=LEFT)
-            messages_by_peers[self.addr.get()] = []
+        self.get_msg(self.addr.get(), self.msg.get())
         ui_out_queue.put(MessageToPeer(self.addr.get(), self.msg.get()))
-        f = self.messages_thread_by_addr[self.addr.get()]
-        Label(f, text=self.msg.get()).pack()
-        messages_by_peers[self.addr.get()].append(self.msg.get())
-        f.tkraise()
 
     def switch(self, value):
         f = self.messages_thread_by_addr.get(value)
         if f is not None:
             f.tkraise()
 
-    def get_msg(self):
-        pass
+    def get_msg(self, addr, msg):
+        port = None
+        if ':' in addr:
+            addr, port = addr.split(':')
+        if addr not in self.messages_thread_by_addr:
+            f = Frame(self.container)
+            self.messages_thread_by_addr[addr] = f
+            f.grid(row=0, column=0, sticky='nsew')
+            Button(self.menubar, text=addr, command=lambda x=addr: self.switch(x)).pack(side=LEFT)
+            messages_by_peers[addr] = []
+        f = self.messages_thread_by_addr[addr]
+        if port is not None:
+            msg = port + ' : ' + msg
+        Label(f, text=msg).pack()
+        messages_by_peers[addr].append(msg)
+        f.tkraise()
 
 
 class Main(Frame):
@@ -430,14 +435,15 @@ class Main(Frame):
             message = self.master.queue.get()
             if type(message) == str:
                 Label(self.main_content, text=message).pack()
-            elif type(message) == StrFromUi:
+            if type(message) == StrFromUi:
                 Label(self.main_content, text=message.message).pack()
-            elif type(message) == ServerCreatedEvent:
+            if type(message) == ServerCreatedEvent:
                 Label(self.server_frame, text=message.message).pack()
-            elif type(message) == MessageFromPeer:
+            if type(message) == MessageFromPeer:
                 m = 'FROM ' + message.server + ' -> ' + message.message
                 Label(self.server_frame, text=m).pack()
                 Label(self.main_content, text=m).pack()
+                self.peer_to_peer.get_msg(message.server, message.message)
         self.master.after(100, self.process_queue)
 
     def switch_main(self, value):
