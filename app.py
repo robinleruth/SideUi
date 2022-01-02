@@ -109,22 +109,39 @@ class Worker(metaclass=abc.ABCMeta):
         pass
 
 
-class RandomSubscriber(Worker):
+class Subscriber(Worker, metaclass=abc.ABCMeta):
     async def _get_from_source(self):
         while True:
-            await self.tell('Ok')
-            await asyncio.sleep(10)
+            update = await self._get_update()
+            await self.tell(update)
+            await asyncio.sleep(self.seconds_before_next_update())
 
     async def start(self):
         loop = asyncio.get_event_loop()
         loop.create_task(self._get_from_source())
         await super().start()
 
-    def get_type(self) -> Type[Event]:
-        return RandomSubscriberEvent
-
     async def _process_message(self, message) -> Any:
         return message
+
+    @abc.abstractmethod
+    def seconds_before_next_update(self) -> int:
+        pass
+
+    @abc.abstractmethod
+    async def _get_update(self) -> Any:
+        pass
+
+
+class RandomSubscriber(Subscriber):
+    def seconds_before_next_update(self) -> int:
+        return 10
+
+    async def _get_update(self) -> Any:
+        return 'Ok'
+
+    def get_type(self) -> Type[Event]:
+        return RandomSubscriberEvent
 
 
 class StrFromUiWorker(Worker):
@@ -207,6 +224,7 @@ async def init_workers():
             workers_by_type[w.get_type().get_repr()] = []
         workers_by_type[w.get_type().get_repr()].append(w)
     await asyncio.gather(*[w.start() for w in lst])
+
 
 dispatcher_queue = asyncio.Queue()
 
@@ -424,7 +442,8 @@ class Main(Frame):
         Tk.config(self.master, menu=menubar)
 
         self.frames = {}
-        for f in zip(('Main', 'TreeView', 'Server', 'Peer to peer'), (self.main_content, self.tview, self.server_frame, self.peer_to_peer)):
+        for f in zip(('Main', 'TreeView', 'Server', 'Peer to peer'),
+                     (self.main_content, self.tview, self.server_frame, self.peer_to_peer)):
             self.frames[f[0]] = f[1]
 
         self.switch_main('Main')
