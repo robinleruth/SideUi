@@ -77,8 +77,8 @@ class MessageToPeer(Event):
 
 
 class FileUpdateEvent(Event):
-    def __init__(self, message) -> None:
-        self.message = message
+    def __init__(self, update) -> None:
+        self.update = update
 
     @staticmethod
     def get_repr():
@@ -142,28 +142,31 @@ class Subscriber(Worker, metaclass=abc.ABCMeta):
         pass
 
 
-class FileSubscriber(Subscriber):
-    def __init__(self, out_queues: List[Queue]):
-        super().__init__(out_queues)
-        self.state = None
-        self.file = r'my_file.txt'
-        if not os.path.exists(self.file):
-            open(self.file, 'w').close()
+class FileSubscriber(Subscriber, metaclass=abc.ABCMeta):
+    async def start(self):
+        if not os.path.exists(self.get_file_name()):
+            open(self.get_file_name(), 'w').close()
+        return await super().start()
 
     def seconds_before_next_update(self) -> int:
         return 1
 
     async def _get_update(self) -> Any:
-        with open(self.file, 'r') as f:
+        with open(self.get_file_name(), 'r') as f:
             update = f.read()
-        if update != self.state and update != '':
+        if update != self.get_file_name() and update != '':
             self.state = update
-            return FileUpdateEvent(update)
+            return self.get_type()(update)
         else:
             return None
 
-    def get_type(self) -> Type[Event]:
-        return FileUpdateEvent
+    @abc.abstractmethod
+    def get_type(self) -> Type[FileUpdateEvent]:
+        pass
+
+    @abc.abstractmethod
+    def get_file_name(self) -> str:
+        pass
 
 
 class RandomSubscriber(Subscriber):
@@ -244,8 +247,7 @@ class MessageToPeerWorker(Worker):
 workers: List[Worker] = [
     StrFromUiWorker(ui_queues),
     ServerWorker(ui_queues),
-    MessageToPeerWorker(ui_queues),
-    FileSubscriber(ui_queues)
+    MessageToPeerWorker(ui_queues)
 ]
 workers_by_type: Dict[str, List[Worker]] = dict()
 
@@ -490,16 +492,16 @@ class Main(Frame):
             if type(message) == str:
                 Label(self.main_content, text=message).pack()
             if type(message) == StrFromUi:
-                Label(self.main_content, text=message.message).pack()
+                Label(self.main_content, text=message.update).pack()
             if type(message) == ServerCreatedEvent:
-                Label(self.server_frame, text=message.message).pack()
+                Label(self.server_frame, text=message.update).pack()
             if type(message) == MessageFromPeer:
-                m = 'FROM ' + message.server + ' -> ' + message.message
+                m = 'FROM ' + message.server + ' -> ' + message.update
                 Label(self.server_frame, text=m).pack()
                 Label(self.main_content, text=m).pack()
-                self.peer_to_peer.get_msg(message.server, message.message)
+                self.peer_to_peer.get_msg(message.server, message.update)
             if type(message) == FileUpdateEvent:
-                m = 'From file : ' + message.message
+                m = 'From file : ' + message.update
                 Label(self.main_content, text=m).pack()
         self.master.after(100, self.process_queue)
 
