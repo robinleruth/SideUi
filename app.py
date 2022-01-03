@@ -296,7 +296,11 @@ class IpAddrListFileSubscriber(FileSubscriber):
         if self.i == 0 and not self.init:
             self.state = []
             self.init = True
-        return await super()._get_update()
+        msg = await super()._get_update()
+        if msg is not None:
+            global config_ip_rows
+            config_ip_rows = msg.update
+        return msg
 
     def get_type(self) -> Type[FileUpdateEvent]:
         return IPAddrListChangedEvent
@@ -315,6 +319,7 @@ workers: List[Worker] = [
     IpAddrListFileSubscriber(ui_queues)
 ]
 workers_by_type: Dict[str, List[Worker]] = dict()
+config_ip_rows = []
 
 
 async def init_workers():
@@ -610,9 +615,14 @@ class ConfigFrame(Frame):
         Frame.__init__(self, parent)
         self.controller = controller
         self.ip_addr_list_tree_view = ttk.Treeview(self)
+        self.ip_addr_list_tree_view['show'] = 'headings'
         self.ip_addr_list_tree_view.pack()
+        self._update_ip_addr_list(config_ip_rows)
 
     def update_ip_addr_list(self, message: IPAddrListChangedEvent):
+        self._update_ip_addr_list(message.update)
+
+    def _update_ip_addr_list(self, lst):
         self.ip_addr_list_tree_view.delete(*self.ip_addr_list_tree_view.get_children())
         cols = ['ip', 'name']
         self.ip_addr_list_tree_view['columns'] = cols
@@ -620,7 +630,7 @@ class ConfigFrame(Frame):
         for i in cols:
             self.ip_addr_list_tree_view.column(i, anchor="w", stretch=True, width=13)
             self.ip_addr_list_tree_view.heading(i, text=i, anchor="w")
-        for i in message.update:
+        for i in lst:
             row = i.split(',')
             self.ip_addr_list_tree_view.insert("", END, values=row)
         self.controller.statusbar.set('Config updated')
