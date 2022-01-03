@@ -288,6 +288,16 @@ class MessageToPeerWorker(Worker):
 
 
 class IpAddrListFileSubscriber(FileSubscriber):
+    i = 2
+    init = False
+
+    async def _get_update(self) -> Any:
+        self.i -= 1
+        if self.i == 0 and not self.init:
+            self.state = []
+            self.init = True
+        return await super()._get_update()
+
     def get_type(self) -> Type[FileUpdateEvent]:
         return IPAddrListChangedEvent
 
@@ -404,7 +414,7 @@ class NavBar(Frame):
     def __init__(self, parent):
         Frame.__init__(self, parent)
         self.parent = parent
-        Label(self, text='Navbar').pack()
+        Label(self, text='=====').pack()
         self.var = IntVar(master=self)
         Radiobutton(self, text='Main', variable=self.var, value=1, command=self.switch).pack()
         Radiobutton(self, text='Test', variable=self.var, value=2, command=self.switch).pack()
@@ -424,7 +434,7 @@ class NavBar(Frame):
         }
 
     def switch(self):
-        self.parent.statusbar.set(self.var.get())
+        # self.parent.statusbar.set(self.var.get())
         self.parent.switch_main(self.lookup[self.var.get()])
 
 
@@ -466,8 +476,9 @@ class TV(Frame):
 
 
 class ServerFrame(Frame):
-    def __init__(self, parent):
+    def __init__(self, parent, controller):
         Frame.__init__(self, parent)
+        self.controller = controller
         Label(self, text='Choose port').pack()
         self.port = StringVar(master=self)
         self.entry = Entry(self, textvariable=self.port)
@@ -475,6 +486,7 @@ class ServerFrame(Frame):
         Button(self, text='Create server', command=self.create_server).pack()
 
     def create_server(self):
+        self.controller.statusbar.set('Creating server for port ' + self.port.get())
         event = CreateServerEvent(self.port.get())
         ui_out_queue.put(event)
 
@@ -483,7 +495,9 @@ messages_by_peers: Dict[str, List[str]] = {}
 
 
 class PeerToPeerFrame(Frame):
-    def __init__(self, parent):
+    def __init__(self, parent, controller):
+        self.parent = parent
+        self.controller = controller
         Frame.__init__(self, parent)
         Label(self, text='Choose server:port').pack()
         self.addr = StringVar(master=self)
@@ -503,21 +517,26 @@ class PeerToPeerFrame(Frame):
         self.container.grid_rowconfigure(0, weight=1)
         self.container.grid_columnconfigure(0, weight=1)
 
-        self.messages_thread_by_addr = {}
+        self.messages_thread_by_addr: Dict[str, VerticalScrolledFrame] = {}
+        self.name_variable_by_addr: Dict[str, StringVar] = {}
 
         for addr in messages_by_peers:
+            if addr not in self.name_variable_by_addr:
+                self.name_variable_by_addr[addr] = StringVar(master=self)
             if addr not in self.messages_thread_by_addr:
                 f = VerticalScrolledFrame(self.container)
                 self.messages_thread_by_addr[addr] = f
                 f.grid(row=0, column=0, sticky='nsew')
-                Button(self.menubar, text=addr, command=lambda x=addr: self.switch(x)).pack(side=LEFT)
+                Button(self.menubar, textvariable=self.name_variable_by_addr[addr], command=lambda x=addr: self.switch(x)).pack(side=LEFT)
             messages = messages_by_peers[addr]
             for message in messages:
                 Label(self.messages_thread_by_addr[addr].interior, text=message).pack()
 
     def send_msg(self):
+        self.controller.statusbar.set('Sending msg...')
         self.get_msg(self.addr.get(), self.msg.get())
         ui_out_queue.put(MessageToPeer(self.addr.get(), self.msg.get()))
+        self.controller.statusbar.set('Sent')
 
     def switch(self, value):
         f = self.messages_thread_by_addr.get(value)
@@ -530,11 +549,13 @@ class PeerToPeerFrame(Frame):
         port = None
         if ':' in addr:
             addr, port = addr.split(':')
+        if addr not in self.name_variable_by_addr:
+            self.name_variable_by_addr[addr] = StringVar(master=self)
         if addr not in self.messages_thread_by_addr:
             f = VerticalScrolledFrame(self.container)
             self.messages_thread_by_addr[addr] = f
             f.grid(row=0, column=0, sticky='nsew')
-            Button(self.menubar, text=addr, command=lambda x=addr: self.switch(x)).pack(side=LEFT)
+            Button(self.menubar, textvariable=self.name_variable_by_addr[addr], command=lambda x=addr: self.switch(x)).pack(side=LEFT)
             messages_by_peers[addr] = []
         f = self.messages_thread_by_addr[addr]
         if port is not None:
@@ -545,6 +566,14 @@ class PeerToPeerFrame(Frame):
         f.tkraise()
         f.canvas.update_idletasks()
         f.canvas.yview_moveto(1)
+
+    def update_button_names(self, message: IPAddrListChangedEvent):
+        lst = [i.split(',') for i in message.update]
+        d = {i[0]: i[1].strip() for i in lst}
+        for ip in d:
+            if ip not in self.name_variable_by_addr:
+                self.get_msg(ip, '')
+            self.name_variable_by_addr[ip].set(d[ip])
 
 
 class SomeDataFrame(Frame):
@@ -568,37 +597,51 @@ class SomeDataFrame(Frame):
         self.tree.delete(*self.tree.get_children())
         df = update.update
         self.tree['columns'] = list(df.columns)
+        self.tree['show'] = 'headings'
         for i in df.columns:
-            self.tree.column(i, anchor="w")
+            self.tree.column(i, anchor="w", stretch=True, width=10)
             self.tree.heading(i, text=i, anchor="w")
         for index, row in df.iterrows():
             self.tree.insert("", END, text=index, values=list(row))
 
 
 class ConfigFrame(Frame):
-    def __init__(self, parent):
+    def __init__(self, parent, controller):
         Frame.__init__(self, parent)
+        self.controller = controller
+        self.ip_addr_list_tree_view = ttk.Treeview(self)
+        self.ip_addr_list_tree_view.pack()
 
     def update_ip_addr_list(self, message: IPAddrListChangedEvent):
-        pass
+        self.ip_addr_list_tree_view.delete(*self.ip_addr_list_tree_view.get_children())
+        cols = ['ip', 'name']
+        self.ip_addr_list_tree_view['columns'] = cols
+        self.ip_addr_list_tree_view['show'] = 'headings'
+        for i in cols:
+            self.ip_addr_list_tree_view.column(i, anchor="w", stretch=True, width=13)
+            self.ip_addr_list_tree_view.heading(i, text=i, anchor="w")
+        for i in message.update:
+            row = i.split(',')
+            self.ip_addr_list_tree_view.insert("", END, values=row)
+        self.controller.statusbar.set('Config updated')
 
 
 class Main(Frame):
     def __init__(self, parent):
         Frame.__init__(self, parent)
         self.statusbar = StatusBar(self)
-        self.toolbar = ToolBar(self)
+        # self.toolbar = ToolBar(self)
         self.navbar = NavBar(self)
         container = Frame(self, width=400, height=400)
         self.main_content = MainContent(container)
         self.tview = TV(container)
-        self.server_frame = ServerFrame(container)
-        self.peer_to_peer = PeerToPeerFrame(container)
+        self.server_frame = ServerFrame(container, self)
+        self.peer_to_peer = PeerToPeerFrame(container, self)
         self.some_data_frame = SomeDataFrame(container)
-        self.config_frame = ConfigFrame(container)
+        self.config_frame = ConfigFrame(container, self)
 
         self.statusbar.pack(side='bottom', fill='x')
-        self.toolbar.pack(side='top', fill='x')
+        # self.toolbar.pack(side='top', fill='x')
         self.navbar.pack(side='left', fill='y')
         container.pack(side='right', fill='both', expand=True)
         container.grid_rowconfigure(0, weight=1)
@@ -641,8 +684,11 @@ class Main(Frame):
             if type(message) == StrFromUi:
                 Label(self.main_content, text=message.message).pack()
             if type(message) == ServerCreatedEvent:
+                self.statusbar.set('Processing ServerCreatedEvent...')
                 Label(self.server_frame, text=message.message).pack()
+                self.statusbar.set('ServerCreatedEvent processed')
             if type(message) == MessageFromPeer:
+                self.statusbar.set('Receiving message from peer')
                 m = 'FROM ' + message.server + ' -> ' + message.message
                 Label(self.server_frame, text=m).pack()
                 Label(self.main_content, text=m).pack()
@@ -653,7 +699,10 @@ class Main(Frame):
             if type(message) == DataFileUpdateEvent:
                 self.some_data_frame.update_tree_view(message)
             if type(message) == IPAddrListChangedEvent:
+                self.statusbar.set('IP Addr list updating...')
                 self.config_frame.update_ip_addr_list(message)
+                self.peer_to_peer.update_button_names(message)
+                self.statusbar.set('IP Addr list changed')
         self.master.after(100, self.process_queue)
 
     def switch_main(self, value):
