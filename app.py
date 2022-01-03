@@ -95,7 +95,13 @@ class DataFileUpdateEvent(FileUpdateEvent):
 
     @staticmethod
     def get_repr():
-        return 'CONFIG FILE UPDATE'
+        return 'DATA FILE UPDATE'
+
+
+class IPAddrListChangedEvent(FileUpdateEvent):
+    @staticmethod
+    def get_repr():
+        return 'IP ADDR LIST CHANGED EVENT'
 
 
 # ================= WORKERS =================
@@ -156,6 +162,10 @@ class Subscriber(Worker, metaclass=abc.ABCMeta):
 
 
 class FileSubscriber(Subscriber, metaclass=abc.ABCMeta):
+    def __init__(self, out_queues: List[Queue]):
+        super().__init__(out_queues)
+        self.state = None
+
     async def start(self):
         if not os.path.exists(self.get_file_name()):
             open(self.get_file_name(), 'w').close()
@@ -166,8 +176,8 @@ class FileSubscriber(Subscriber, metaclass=abc.ABCMeta):
 
     async def _get_update(self) -> Any:
         with open(self.get_file_name(), 'r') as f:
-            update = f.read()
-        if update != self.get_file_name() and update != '':
+            update = f.readlines()
+        if update != self.state and update != []:
             self.state = update
             return self.get_type()(update)
         else:
@@ -277,13 +287,22 @@ class MessageToPeerWorker(Worker):
         return StrFromUi('Message sent !')
 
 
+class IpAddrListFileSubscriber(FileSubscriber):
+    def get_type(self) -> Type[FileUpdateEvent]:
+        return IPAddrListChangedEvent
+
+    def get_file_name(self) -> str:
+        return 'ip_addr_list.txt'
+
+
 # ================= SET UP =================
 
 workers: List[Worker] = [
     StrFromUiWorker(ui_queues),
     ServerWorker(ui_queues),
     MessageToPeerWorker(ui_queues),
-    DataFileSubscriber(ui_queues)
+    DataFileSubscriber(ui_queues),
+    IpAddrListFileSubscriber(ui_queues)
 ]
 workers_by_type: Dict[str, List[Worker]] = dict()
 
@@ -560,6 +579,9 @@ class ConfigFrame(Frame):
     def __init__(self, parent):
         Frame.__init__(self, parent)
 
+    def update_ip_addr_list(self, message: IPAddrListChangedEvent):
+        pass
+
 
 class Main(Frame):
     def __init__(self, parent):
@@ -630,6 +652,8 @@ class Main(Frame):
                 Label(self.main_content, text=m).pack()
             if type(message) == DataFileUpdateEvent:
                 self.some_data_frame.update_tree_view(message)
+            if type(message) == IPAddrListChangedEvent:
+                self.config_frame.update_ip_addr_list(message)
         self.master.after(100, self.process_queue)
 
     def switch_main(self, value):
