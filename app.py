@@ -537,6 +537,8 @@ class PeerToPeerFrame(Frame):
             for message in messages:
                 Label(self.messages_thread_by_addr[addr].interior, text=message).pack()
 
+        self._update_button_names(config_ip_rows)
+
     def send_msg(self):
         self.controller.statusbar.set('Sending msg...')
         self.get_msg(self.addr.get(), self.msg.get())
@@ -573,7 +575,10 @@ class PeerToPeerFrame(Frame):
         f.canvas.yview_moveto(1)
 
     def update_button_names(self, message: IPAddrListChangedEvent):
-        lst = [i.split(',') for i in message.update]
+        self._update_button_names(message.update)
+
+    def _update_button_names(self, lst):
+        lst = [i.split(',') for i in lst]
         d = {i[0]: i[1].strip() for i in lst}
         for ip in d:
             if ip not in self.name_variable_by_addr:
