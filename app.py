@@ -1,11 +1,14 @@
 import abc
 import asyncio
 import os
+import pandas as pd
 from queue import Queue
 from threading import Thread
 from tkinter import *
 from tkinter import ttk
 from typing import List, Dict, Any, Type
+
+from pandas.errors import EmptyDataError
 
 ui_queues: List[Queue] = []
 ui_out_queue = Queue()
@@ -83,6 +86,14 @@ class FileUpdateEvent(Event):
     @staticmethod
     def get_repr():
         return 'FILE UPDATE'
+
+
+class DataFileUpdateEvent(FileUpdateEvent):
+    update: pd.DataFrame
+
+    @staticmethod
+    def get_repr():
+        return 'CONFIG FILE UPDATE'
 
 
 # ================= WORKERS =================
@@ -169,6 +180,28 @@ class FileSubscriber(Subscriber, metaclass=abc.ABCMeta):
         pass
 
 
+class DataFileSubscriber(FileSubscriber):
+    def __init__(self, out_queues: List[Queue]):
+        super().__init__(out_queues)
+        self.state = None
+
+    async def _get_update(self) -> Any:
+        try:
+            df = pd.read_csv(self.get_file_name())
+        except EmptyDataError:
+            print('No data in data file')
+        else:
+            if not df.equals(self.state):
+                self.state = df
+                return self.get_type()(df)
+
+    def get_type(self) -> Type[FileUpdateEvent]:
+        return DataFileUpdateEvent
+
+    def get_file_name(self) -> str:
+        return 'some_data.txt'
+
+
 class RandomSubscriber(Subscriber):
     def seconds_before_next_update(self) -> int:
         return 10
@@ -247,7 +280,8 @@ class MessageToPeerWorker(Worker):
 workers: List[Worker] = [
     StrFromUiWorker(ui_queues),
     ServerWorker(ui_queues),
-    MessageToPeerWorker(ui_queues)
+    MessageToPeerWorker(ui_queues),
+    DataFileSubscriber(ui_queues)
 ]
 workers_by_type: Dict[str, List[Worker]] = dict()
 
@@ -307,16 +341,20 @@ class NavBar(Frame):
         Label(self, text='Navbar').pack()
         self.var = IntVar(master=self)
         Radiobutton(self, text='Main', variable=self.var, value=1, command=self.switch).pack()
-        Radiobutton(self, text='TreeView', variable=self.var, value=2, command=self.switch).pack()
+        Radiobutton(self, text='Test', variable=self.var, value=2, command=self.switch).pack()
         Radiobutton(self, text='Server', variable=self.var, value=3, command=self.switch).pack()
         Radiobutton(self, text='Peer to peer', variable=self.var, value=4, command=self.switch).pack()
+        Radiobutton(self, text='Data', variable=self.var, value=5, command=self.switch).pack()
+        Radiobutton(self, text='Config', variable=self.var, value=6, command=self.switch).pack()
         self.var.set(1)
 
         self.lookup = {
             1: 'Main',
-            2: 'TreeView',
+            2: 'Test',
             3: 'Server',
-            4: 'Peer to peer'
+            4: 'Peer to peer',
+            5: 'Data',
+            6: 'Config'
         }
 
     def switch(self):
@@ -351,7 +389,7 @@ class MainContent(Frame):
 class TV(Frame):
     def __init__(self, parent):
         Frame.__init__(self, parent)
-        Label(self, text='TreeView').pack()
+        Label(self, text='Test').pack()
         self.entry = Entry(self)
         self.entry.pack()
         Button(self, text='Send event', command=self.send_event).pack()
@@ -440,6 +478,28 @@ class PeerToPeerFrame(Frame):
         f.tkraise()
 
 
+class SomeDataFrame(Frame):
+    def __init__(self, parent):
+        Frame.__init__(self, parent)
+        self.tree = ttk.Treeview(self)
+        self.tree.pack()
+
+    def update_tree_view(self, update: DataFileUpdateEvent):
+        self.tree.delete(*self.tree.get_children())
+        df = update.update
+        self.tree['columns'] = list(df.columns)
+        for i in df.columns:
+            self.tree.column(i, anchor="w")
+            self.tree.heading(i, text=i, anchor="w")
+        for index, row in df.iterrows():
+            self.tree.insert("", 0, text=index, values=list(row))
+
+
+class ConfigFrame(Frame):
+    def __init__(self, parent):
+        Frame.__init__(self, parent)
+
+
 class Main(Frame):
     def __init__(self, parent):
         Frame.__init__(self, parent)
@@ -451,6 +511,8 @@ class Main(Frame):
         self.tview = TV(container)
         self.server_frame = ServerFrame(container)
         self.peer_to_peer = PeerToPeerFrame(container)
+        self.some_data_frame = SomeDataFrame(container)
+        self.config_frame = ConfigFrame(container)
 
         self.statusbar.pack(side='bottom', fill='x')
         self.toolbar.pack(side='top', fill='x')
@@ -462,6 +524,8 @@ class Main(Frame):
         self.tview.grid(row=0, column=0, sticky='nsew')
         self.server_frame.grid(row=0, column=0, sticky='nsew')
         self.peer_to_peer.grid(row=0, column=0, sticky='nsew')
+        self.some_data_frame.grid(row=0, column=0, sticky='nsew')
+        self.config_frame.grid(row=0, column=0, sticky='nsew')
 
         menubar = Menu(container)
         filemenu = Menu(menubar, tearoff=0)
@@ -478,8 +542,8 @@ class Main(Frame):
         Tk.config(self.master, menu=menubar)
 
         self.frames = {}
-        for f in zip(('Main', 'TreeView', 'Server', 'Peer to peer'),
-                     (self.main_content, self.tview, self.server_frame, self.peer_to_peer)):
+        for f in zip(('Main', 'Test', 'Server', 'Peer to peer', 'Data', 'Config'),
+                     (self.main_content, self.tview, self.server_frame, self.peer_to_peer, self.some_data_frame, self.config_frame)):
             self.frames[f[0]] = f[1]
 
         self.switch_main('Main')
@@ -492,17 +556,19 @@ class Main(Frame):
             if type(message) == str:
                 Label(self.main_content, text=message).pack()
             if type(message) == StrFromUi:
-                Label(self.main_content, text=message.update).pack()
+                Label(self.main_content, text=message.message).pack()
             if type(message) == ServerCreatedEvent:
-                Label(self.server_frame, text=message.update).pack()
+                Label(self.server_frame, text=message.message).pack()
             if type(message) == MessageFromPeer:
-                m = 'FROM ' + message.server + ' -> ' + message.update
+                m = 'FROM ' + message.server + ' -> ' + message.message
                 Label(self.server_frame, text=m).pack()
                 Label(self.main_content, text=m).pack()
-                self.peer_to_peer.get_msg(message.server, message.update)
+                self.peer_to_peer.get_msg(message.server, message.message)
             if type(message) == FileUpdateEvent:
                 m = 'From file : ' + message.update
                 Label(self.main_content, text=m).pack()
+            if type(message) == DataFileUpdateEvent:
+                self.some_data_frame.update_tree_view(message)
         self.master.after(100, self.process_queue)
 
     def switch_main(self, value):
