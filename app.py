@@ -1,12 +1,11 @@
 import abc
 import asyncio
-import queue
-
+import os
 from queue import Queue
 from threading import Thread
+from tkinter import *
 from tkinter import ttk
 from typing import List, Dict, Any, Type
-from tkinter import *
 
 ui_queues: List[Queue] = []
 ui_out_queue = Queue()
@@ -77,6 +76,15 @@ class MessageToPeer(Event):
         return self.message + ' -> ' + self.server
 
 
+class FileUpdateEvent(Event):
+    def __init__(self, message) -> None:
+        self.message = message
+
+    @staticmethod
+    def get_repr():
+        return 'FILE UPDATE'
+
+
 # ================= WORKERS =================
 
 
@@ -113,7 +121,8 @@ class Subscriber(Worker, metaclass=abc.ABCMeta):
     async def _get_from_source(self):
         while True:
             update = await self._get_update()
-            await self.tell(update)
+            if update is not None:
+                await self.tell(update)
             await asyncio.sleep(self.seconds_before_next_update())
 
     async def start(self):
@@ -131,6 +140,30 @@ class Subscriber(Worker, metaclass=abc.ABCMeta):
     @abc.abstractmethod
     async def _get_update(self) -> Any:
         pass
+
+
+class FileSubscriber(Subscriber):
+    def __init__(self, out_queues: List[Queue]):
+        super().__init__(out_queues)
+        self.state = None
+        self.file = r'my_file.txt'
+        if not os.path.exists(self.file):
+            open(self.file, 'w').close()
+
+    def seconds_before_next_update(self) -> int:
+        return 1
+
+    async def _get_update(self) -> Any:
+        with open(self.file, 'r') as f:
+            update = f.read()
+        if update != self.state and update != '':
+            self.state = update
+            return FileUpdateEvent(update)
+        else:
+            return None
+
+    def get_type(self) -> Type[Event]:
+        return FileUpdateEvent
 
 
 class RandomSubscriber(Subscriber):
@@ -211,7 +244,8 @@ class MessageToPeerWorker(Worker):
 workers: List[Worker] = [
     StrFromUiWorker(ui_queues),
     ServerWorker(ui_queues),
-    MessageToPeerWorker(ui_queues)
+    MessageToPeerWorker(ui_queues),
+    FileSubscriber(ui_queues)
 ]
 workers_by_type: Dict[str, List[Worker]] = dict()
 
@@ -464,6 +498,9 @@ class Main(Frame):
                 Label(self.server_frame, text=m).pack()
                 Label(self.main_content, text=m).pack()
                 self.peer_to_peer.get_msg(message.server, message.message)
+            if type(message) == FileUpdateEvent:
+                m = 'From file : ' + message.message
+                Label(self.main_content, text=m).pack()
         self.master.after(100, self.process_queue)
 
     def switch_main(self, value):
