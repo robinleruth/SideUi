@@ -1,6 +1,8 @@
 import abc
 import asyncio
 import os
+from tkinter.messagebox import showinfo
+
 import pandas as pd
 from queue import Queue
 from threading import Thread
@@ -482,7 +484,18 @@ class SomeDataFrame(Frame):
     def __init__(self, parent):
         Frame.__init__(self, parent)
         self.tree = ttk.Treeview(self)
-        self.tree.pack()
+        self.tree.grid(row=0, column=0, sticky='nsew')
+        self.tree.bind('<<TreeviewSelect>>', self.item_selected)
+        scrollbar = ttk.Scrollbar(self, orient=VERTICAL, command=self.tree.yview)
+        self.tree.configure(yscroll=scrollbar.set)
+        scrollbar.grid(row=0, column=1, sticky='ns')
+
+    def item_selected(self, event):
+        for selected_item in self.tree.selection():
+            item = self.tree.item(selected_item)
+            record = item['values']
+            # show a message
+            showinfo(title='Information', message=','.join(record))
 
     def update_tree_view(self, update: DataFileUpdateEvent):
         self.tree.delete(*self.tree.get_children())
@@ -492,7 +505,7 @@ class SomeDataFrame(Frame):
             self.tree.column(i, anchor="w")
             self.tree.heading(i, text=i, anchor="w")
         for index, row in df.iterrows():
-            self.tree.insert("", 0, text=index, values=list(row))
+            self.tree.insert("", END, text=index, values=list(row))
 
 
 class ConfigFrame(Frame):
