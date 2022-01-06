@@ -535,7 +535,7 @@ class PeerToPeerFrame(Frame):
                 Button(self.menubar, textvariable=self.name_variable_by_addr[addr], command=lambda x=addr: self.switch(x)).pack(side=LEFT)
             messages = messages_by_peers[addr]
             for message in messages:
-                Label(self.messages_thread_by_addr[addr].interior, text=message).pack()
+                Label(self.messages_thread_by_addr[addr].interior, text=message).pack(expand=True)
 
         self._update_button_names(config_ip_rows)
 
@@ -568,7 +568,7 @@ class PeerToPeerFrame(Frame):
         if port is not None:
             port = 'Me' if port == '8888' else 'Other'
             msg = port + ' : ' + msg
-        Label(f.interior, text=msg).pack()
+        Label(f.interior, text=msg).pack(expand=True)
         messages_by_peers[addr].append(msg)
         f.tkraise()
         f.canvas.update_idletasks()
