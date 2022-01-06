@@ -518,7 +518,7 @@ class PeerToPeerFrame(Frame):
         self.menubar.pack()
 
         self.container = Frame(self)
-        self.container.pack()
+        self.container.pack(expand=True)
         self.container.grid_rowconfigure(0, weight=1)
         self.container.grid_columnconfigure(0, weight=1)
 
