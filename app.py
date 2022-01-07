@@ -1,6 +1,8 @@
 import abc
 import asyncio
 import os
+import platform
+import subprocess
 from tkinter.messagebox import showinfo
 
 import pandas as pd
@@ -16,6 +18,7 @@ ui_queues: List[Queue] = []
 ui_out_queue = Queue()
 
 NORM_FONT = ("Helvetica", 10)
+TODO_FILE = r'A_todo_today.txt'
 
 
 # ================= EVENT =================
@@ -138,6 +141,7 @@ class Worker(metaclass=abc.ABCMeta):
 
 class Subscriber(Worker, metaclass=abc.ABCMeta):
     async def _get_from_source(self):
+        await asyncio.sleep(1)
         while True:
             update = await self._get_update()
             if update is not None:
@@ -309,6 +313,22 @@ class IpAddrListFileSubscriber(FileSubscriber):
         return 'ip_addr_list.txt'
 
 
+class TodoFileUpdate(FileUpdateEvent):
+    update: List[str]
+
+    @staticmethod
+    def get_repr():
+        return 'TODO FILE UPDATE'
+
+
+class TodoFileSubscriber(FileSubscriber):
+    def get_type(self) -> Type[FileUpdateEvent]:
+        return TodoFileUpdate
+
+    def get_file_name(self) -> str:
+        return TODO_FILE
+
+
 # ================= SET UP =================
 
 workers: List[Worker] = [
@@ -316,7 +336,8 @@ workers: List[Worker] = [
     ServerWorker(ui_queues),
     MessageToPeerWorker(ui_queues),
     DataFileSubscriber(ui_queues),
-    IpAddrListFileSubscriber(ui_queues)
+    IpAddrListFileSubscriber(ui_queues),
+    TodoFileSubscriber(ui_queues)
 ]
 workers_by_type: Dict[str, List[Worker]] = dict()
 config_ip_rows = []
@@ -366,6 +387,10 @@ def process_message_from_ui():
     loop.create_task(dispatcher())
 
     loop.run_forever()
+
+
+def get_all_files_subscribers() -> List[FileSubscriber]:
+    return [i for i in workers if isinstance(i, FileSubscriber)]
 
 
 # ================= UI =================
@@ -427,6 +452,7 @@ class NavBar(Frame):
         Radiobutton(self, text='Peer to peer', variable=self.var, value=4, command=self.switch).pack()
         Radiobutton(self, text='Data', variable=self.var, value=5, command=self.switch).pack()
         Radiobutton(self, text='Config', variable=self.var, value=6, command=self.switch).pack()
+        Radiobutton(self, text='Todo', variable=self.var, value=7, command=self.switch).pack()
         self.var.set(1)
 
         self.lookup = {
@@ -435,7 +461,8 @@ class NavBar(Frame):
             3: 'Server',
             4: 'Peer to peer',
             5: 'Data',
-            6: 'Config'
+            6: 'Config',
+            7: 'Todo'
         }
 
     def switch(self):
@@ -641,6 +668,29 @@ class ConfigFrame(Frame):
         self.controller.statusbar.set('Config updated')
 
 
+class TodoFrame(Frame):
+    def __init__(self, parent, controller):
+        Frame.__init__(self, parent)
+        self.controller = controller
+        self.container = VerticalScrolledFrame(self)
+        Button(self, text="Open file", command=self._open_file).pack()
+        self.container.pack(expand=True)
+
+    def update_todos(self, message: TodoFileUpdate):
+        for item in self.container.interior.winfo_children():
+            item.destroy()
+        for update in message.update:
+            Label(self.container.interior, text=update.strip()).pack(expand=True)
+
+    def _open_file(self):
+        if platform.system() == 'Darwin':  # macOS
+            subprocess.call(('open', TODO_FILE))
+        elif platform.system() == 'Windows':  # Windows
+            os.startfile(TODO_FILE)
+        else:  # linux variants
+            subprocess.call(['gedit', TODO_FILE])
+
+
 class Main(Frame):
     def __init__(self, parent):
         Frame.__init__(self, parent)
@@ -654,6 +704,7 @@ class Main(Frame):
         self.peer_to_peer = PeerToPeerFrame(container, self)
         self.some_data_frame = SomeDataFrame(container)
         self.config_frame = ConfigFrame(container, self)
+        self.todo_frame = TodoFrame(container, self)
 
         self.statusbar.pack(side='bottom', fill='x')
         # self.toolbar.pack(side='top', fill='x')
@@ -667,6 +718,7 @@ class Main(Frame):
         self.peer_to_peer.grid(row=0, column=0, sticky='nsew')
         self.some_data_frame.grid(row=0, column=0, sticky='nsew')
         self.config_frame.grid(row=0, column=0, sticky='nsew')
+        self.todo_frame.grid(row=0, column=0, sticky='nsew')
 
         menubar = Menu(container)
         filemenu = Menu(menubar, tearoff=0)
@@ -683,8 +735,8 @@ class Main(Frame):
         Tk.config(self.master, menu=menubar)
 
         self.frames = {}
-        for f in zip(('Main', 'Test', 'Server', 'Peer to peer', 'Data', 'Config'),
-                     (self.main_content, self.tview, self.server_frame, self.peer_to_peer, self.some_data_frame, self.config_frame)):
+        for f in zip(('Main', 'Test', 'Server', 'Peer to peer', 'Data', 'Config', 'Todo'),
+                     (self.main_content, self.tview, self.server_frame, self.peer_to_peer, self.some_data_frame, self.config_frame, self.todo_frame)):
             self.frames[f[0]] = f[1]
 
         self.switch_main('Main')
@@ -718,6 +770,10 @@ class Main(Frame):
                 self.config_frame.update_ip_addr_list(message)
                 self.peer_to_peer.update_button_names(message)
                 self.statusbar.set('IP Addr list changed')
+            if type(message) == TodoFileUpdate:
+                self.statusbar.set('Todo file updating...')
+                self.todo_frame.update_todos(message)
+                self.statusbar.set('Todo file updated')
         self.master.after(100, self.process_queue)
 
     def switch_main(self, value):
