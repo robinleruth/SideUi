@@ -644,7 +644,7 @@ class SomeDataFrame(Frame):
     def item_selected(self, event):
         for selected_item in self.tree.selection():
             item = self.tree.item(selected_item)
-            record = item['values']
+            record = [str(i) for i in item['values']]
             # show a message
             showinfo(title='Information', message=','.join(record))
 
