@@ -19,6 +19,20 @@ ui_out_queue = Queue()
 
 NORM_FONT = ("Helvetica", 10)
 TODO_FILE = r'A_todo_today.txt'
+SOME_DATA_FILE = r'some_data.txt'
+IP_FILE = r'ip_addr_list.txt'
+
+
+# ================= UTIL =================
+
+
+def open_file(file_name):
+    if platform.system() == 'Darwin':  # macOS
+        subprocess.call(('open', file_name))
+    elif platform.system() == 'Windows':  # Windows
+        os.startfile(file_name)
+    else:  # linux variants
+        subprocess.call(['gedit', file_name])
 
 
 # ================= EVENT =================
@@ -215,7 +229,7 @@ class DataFileSubscriber(FileSubscriber):
         return DataFileUpdateEvent
 
     def get_file_name(self) -> str:
-        return 'some_data.txt'
+        return SOME_DATA_FILE
 
 
 class RandomSubscriber(Subscriber):
@@ -310,7 +324,7 @@ class IpAddrListFileSubscriber(FileSubscriber):
         return IPAddrListChangedEvent
 
     def get_file_name(self) -> str:
-        return 'ip_addr_list.txt'
+        return IP_FILE
 
 
 class TodoFileUpdate(FileUpdateEvent):
@@ -650,6 +664,7 @@ class ConfigFrame(Frame):
     def __init__(self, parent, controller):
         Frame.__init__(self, parent)
         self.controller = controller
+        Button(self, text="Open file", command=lambda: open_file(IP_FILE)).pack()
         self.ip_addr_list_tree_view = Treeview(self)
         self.ip_addr_list_tree_view['show'] = 'headings'
         self.ip_addr_list_tree_view.pack(fill='x', expand=True)
@@ -677,7 +692,7 @@ class TodoFrame(Frame):
         Frame.__init__(self, parent)
         self.controller = controller
         self.container = VerticalScrolledFrame(self)
-        Button(self, text="Open file", command=self._open_file).pack()
+        Button(self, text="Open file", command=lambda: open_file(TODO_FILE)).pack()
         self.container.pack(expand=True, fill='x')
 
     def update_todos(self, message: TodoFileUpdate):
@@ -685,14 +700,6 @@ class TodoFrame(Frame):
             item.destroy()
         for update in message.update:
             Label(self.container.interior, text=update.strip()).pack()
-
-    def _open_file(self):
-        if platform.system() == 'Darwin':  # macOS
-            subprocess.call(('open', TODO_FILE))
-        elif platform.system() == 'Windows':  # Windows
-            os.startfile(TODO_FILE)
-        else:  # linux variants
-            subprocess.call(['gedit', TODO_FILE])
 
 
 class Main(Frame):
