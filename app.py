@@ -306,14 +306,7 @@ class MessageToPeerWorker(Worker):
 
 
 class IpAddrListFileSubscriber(FileSubscriber):
-    i = 2
-    init = False
-
     async def _get_update(self) -> Any:
-        self.i -= 1
-        if self.i == 0 and not self.init:
-            self.state = []
-            self.init = True
         msg = await super()._get_update()
         if msg is not None:
             global config_ip_rows
