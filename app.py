@@ -562,7 +562,7 @@ class PeerToPeerFrame(Frame):
                 Button(self.menubar, textvariable=self.name_variable_by_addr[addr], command=lambda x=addr: self.switch(x)).pack(side=LEFT)
             messages = messages_by_peers[addr]
             for message in messages:
-                Label(self.messages_thread_by_addr[addr].interior, text=message).pack(expand=True, fill='x')
+                Label(self.messages_thread_by_addr[addr].interior, text=message).pack()
 
         self._update_button_names(config_ip_rows)
 
@@ -595,7 +595,7 @@ class PeerToPeerFrame(Frame):
         if port is not None:
             port = 'Me' if port == '8888' else 'Other'
             msg = port + ' : ' + msg
-        Label(f.interior, text=msg).pack(expand=True, fill='x')
+        Label(f.interior, text=msg).pack()
         messages_by_peers[addr].append(msg)
         f.tkraise()
         f.canvas.update_idletasks()
@@ -684,7 +684,7 @@ class TodoFrame(Frame):
         for item in self.container.interior.winfo_children():
             item.destroy()
         for update in message.update:
-            Label(self.container.interior, text=update.strip()).pack(expand=True, fill='x')
+            Label(self.container.interior, text=update.strip()).pack()
 
     def _open_file(self):
         if platform.system() == 'Darwin':  # macOS
@@ -751,22 +751,22 @@ class Main(Frame):
         while not self.master.queue.empty():
             message = self.master.queue.get()
             if type(message) == str:
-                Label(self.main_content, text=message).pack(fill='x', expand=True)
+                Label(self.main_content, text=message).pack()
             if type(message) == StrFromUi:
-                Label(self.main_content, text=message.message).pack(fill='x', expand=True)
+                Label(self.main_content, text=message.message).pack()
             if type(message) == ServerCreatedEvent:
                 self.statusbar.set('Processing ServerCreatedEvent...')
-                Label(self.server_frame, text=message.message).pack(fill='x', expand=True)
+                Label(self.server_frame, text=message.message).pack()
                 self.statusbar.set('ServerCreatedEvent processed')
             if type(message) == MessageFromPeer:
                 self.statusbar.set('Receiving message from peer')
                 m = 'FROM ' + message.server + ' -> ' + message.message
-                Label(self.server_frame, text=m).pack(fill='x', expand=True)
-                Label(self.main_content, text=m).pack(fill='x', expand=True)
+                Label(self.server_frame, text=m).pack()
+                Label(self.main_content, text=m).pack()
                 self.peer_to_peer.get_msg(message.server, message.message)
             if type(message) == FileUpdateEvent:
                 m = 'From file : ' + message.update
-                Label(self.main_content, text=m).pack(fill='x', expand=True)
+                Label(self.main_content, text=m).pack()
             if type(message) == DataFileUpdateEvent:
                 self.some_data_frame.update_tree_view(message)
             if type(message) == IPAddrListChangedEvent:
