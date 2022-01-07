@@ -3,16 +3,16 @@ import asyncio
 import os
 import platform
 import subprocess
-from tkinter.messagebox import showinfo
 
-import pandas as pd
+# import pandas as pd
 from queue import Queue
 from threading import Thread
 from tkinter import *
 from tkinter.ttk import *
 from typing import List, Dict, Any, Type
+from tkinter.messagebox import showinfo
 
-from pandas.errors import EmptyDataError
+# from pandas.errors import EmptyDataError
 
 ui_queues: List[Queue] = []
 ui_out_queue = Queue()
@@ -105,14 +105,14 @@ class FileUpdateEvent(Event):
     @staticmethod
     def get_repr():
         return 'FILE UPDATE'
-
-
-class DataFileUpdateEvent(FileUpdateEvent):
-    update: pd.DataFrame
-
-    @staticmethod
-    def get_repr():
-        return 'DATA FILE UPDATE'
+#
+#
+# class DataFileUpdateEvent(FileUpdateEvent):
+#     update: pd.DataFrame
+#
+#     @staticmethod
+#     def get_repr():
+#         return 'DATA FILE UPDATE'
 
 
 class IPAddrListChangedEvent(FileUpdateEvent):
@@ -208,28 +208,28 @@ class FileSubscriber(Subscriber, metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def get_file_name(self) -> str:
         pass
-
-
-class DataFileSubscriber(FileSubscriber):
-    def __init__(self, out_queues: List[Queue]):
-        super().__init__(out_queues)
-        self.state = None
-
-    async def _get_update(self) -> Any:
-        try:
-            df = pd.read_csv(self.get_file_name())
-        except EmptyDataError:
-            print('No data in data file')
-        else:
-            if not df.equals(self.state):
-                self.state = df
-                return self.get_type()(df)
-
-    def get_type(self) -> Type[FileUpdateEvent]:
-        return DataFileUpdateEvent
-
-    def get_file_name(self) -> str:
-        return SOME_DATA_FILE
+#
+#
+# class DataFileSubscriber(FileSubscriber):
+#     def __init__(self, out_queues: List[Queue]):
+#         super().__init__(out_queues)
+#         self.state = None
+#
+#     async def _get_update(self) -> Any:
+#         try:
+#             df = pd.read_csv(self.get_file_name())
+#         except EmptyDataError:
+#             print('No data in data file')
+#         else:
+#             if not df.equals(self.state):
+#                 self.state = df
+#                 return self.get_type()(df)
+#
+#     def get_type(self) -> Type[FileUpdateEvent]:
+#         return DataFileUpdateEvent
+#
+#     def get_file_name(self) -> str:
+#         return SOME_DATA_FILE
 
 
 class RandomSubscriber(Subscriber):
@@ -349,7 +349,7 @@ workers: List[Worker] = [
     StrFromUiWorker(ui_queues),
     ServerWorker(ui_queues),
     MessageToPeerWorker(ui_queues),
-    DataFileSubscriber(ui_queues),
+    # DataFileSubscriber(ui_queues),
     IpAddrListFileSubscriber(ui_queues),
     TodoFileSubscriber(ui_queues)
 ]
@@ -464,7 +464,7 @@ class NavBar(Frame):
         Radiobutton(self, text='Test', variable=self.var, value=2, command=self.switch).pack()
         Radiobutton(self, text='Server', variable=self.var, value=3, command=self.switch).pack()
         Radiobutton(self, text='Peer to peer', variable=self.var, value=4, command=self.switch).pack()
-        Radiobutton(self, text='Data', variable=self.var, value=5, command=self.switch).pack()
+        # Radiobutton(self, text='Data', variable=self.var, value=5, command=self.switch).pack()
         Radiobutton(self, text='Config', variable=self.var, value=6, command=self.switch).pack()
         Radiobutton(self, text='Todo', variable=self.var, value=7, command=self.switch).pack()
         self.var.set(1)
@@ -474,7 +474,7 @@ class NavBar(Frame):
             2: 'Test',
             3: 'Server',
             4: 'Peer to peer',
-            5: 'Data',
+            # 5: 'Data',
             6: 'Config',
             7: 'Todo'
         }
@@ -625,39 +625,39 @@ class PeerToPeerFrame(Frame):
             if ip not in self.name_variable_by_addr:
                 self.get_msg(ip, '')
             self.name_variable_by_addr[ip].set(d[ip])
-
-
-class SomeDataFrame(Frame):
-    def __init__(self, parent):
-        Frame.__init__(self, parent)
-        container = Frame(self)
-        container.pack(expand=True, fill='both')
-        container.grid_rowconfigure(0, weight=1)
-        container.grid_columnconfigure(0, weight=1)
-        self.tree = Treeview(container)
-        self.tree.grid(row=0, column=0, sticky='nsew')
-        self.tree.bind('<<TreeviewSelect>>', self.item_selected)
-        scrollbar = Scrollbar(container, orient=VERTICAL, command=self.tree.yview)
-        self.tree.configure(yscroll=scrollbar.set)
-        scrollbar.grid(row=0, column=1, sticky='ns')
-
-    def item_selected(self, event):
-        for selected_item in self.tree.selection():
-            item = self.tree.item(selected_item)
-            record = [str(i) for i in item['values']]
-            # show a message
-            showinfo(title='Information', message=','.join(record))
-
-    def update_tree_view(self, update: DataFileUpdateEvent):
-        self.tree.delete(*self.tree.get_children())
-        df = update.update
-        self.tree['columns'] = list(df.columns)
-        self.tree['show'] = 'headings'
-        for i in df.columns:
-            self.tree.column(i, anchor="w", stretch=True, width=10)
-            self.tree.heading(i, text=i, anchor="w")
-        for index, row in df.iterrows():
-            self.tree.insert("", END, text=index, values=list(row))
+#
+#
+# class SomeDataFrame(Frame):
+#     def __init__(self, parent):
+#         Frame.__init__(self, parent)
+#         container = Frame(self)
+#         container.pack(expand=True, fill='both')
+#         container.grid_rowconfigure(0, weight=1)
+#         container.grid_columnconfigure(0, weight=1)
+#         self.tree = Treeview(container)
+#         self.tree.grid(row=0, column=0, sticky='nsew')
+#         self.tree.bind('<<TreeviewSelect>>', self.item_selected)
+#         scrollbar = Scrollbar(container, orient=VERTICAL, command=self.tree.yview)
+#         self.tree.configure(yscroll=scrollbar.set)
+#         scrollbar.grid(row=0, column=1, sticky='ns')
+#
+#     def item_selected(self, event):
+#         for selected_item in self.tree.selection():
+#             item = self.tree.item(selected_item)
+#             record = [str(i) for i in item['values']]
+#             # show a message
+#             showinfo(title='Information', message=','.join(record))
+#
+#     def update_tree_view(self, update: DataFileUpdateEvent):
+#         self.tree.delete(*self.tree.get_children())
+#         df = update.update
+#         self.tree['columns'] = list(df.columns)
+#         self.tree['show'] = 'headings'
+#         for i in df.columns:
+#             self.tree.column(i, anchor="w", stretch=True, width=10)
+#             self.tree.heading(i, text=i, anchor="w")
+#         for index, row in df.iterrows():
+#             self.tree.insert("", END, text=index, values=list(row))
 
 
 class ConfigFrame(Frame):
@@ -713,7 +713,7 @@ class Main(Frame):
         self.tview = TV(container)
         self.server_frame = ServerFrame(container, self)
         self.peer_to_peer = PeerToPeerFrame(container, self)
-        self.some_data_frame = SomeDataFrame(container)
+        # self.some_data_frame = SomeDataFrame(container)
         self.config_frame = ConfigFrame(container, self)
         self.todo_frame = TodoFrame(container, self)
 
@@ -727,7 +727,7 @@ class Main(Frame):
         self.tview.grid(row=0, column=0, sticky='nsew')
         self.server_frame.grid(row=0, column=0, sticky='nsew')
         self.peer_to_peer.grid(row=0, column=0, sticky='nsew')
-        self.some_data_frame.grid(row=0, column=0, sticky='nsew')
+        # self.some_data_frame.grid(row=0, column=0, sticky='nsew')
         self.config_frame.grid(row=0, column=0, sticky='nsew')
         self.todo_frame.grid(row=0, column=0, sticky='nsew')
 
@@ -746,8 +746,8 @@ class Main(Frame):
         Tk.config(self.master, menu=menubar)
 
         self.frames = {}
-        for f in zip(('Main', 'Test', 'Server', 'Peer to peer', 'Data', 'Config', 'Todo'),
-                     (self.main_content, self.tview, self.server_frame, self.peer_to_peer, self.some_data_frame, self.config_frame, self.todo_frame)):
+        for f in zip(('Main', 'Test', 'Server', 'Peer to peer', 'Config', 'Todo'),
+                     (self.main_content, self.tview, self.server_frame, self.peer_to_peer, self.config_frame, self.todo_frame)):
             self.frames[f[0]] = f[1]
 
         self.switch_main('Main')
@@ -774,8 +774,8 @@ class Main(Frame):
             if type(message) == FileUpdateEvent:
                 m = 'From file : ' + message.update
                 Label(self.main_content, text=m).pack()
-            if type(message) == DataFileUpdateEvent:
-                self.some_data_frame.update_tree_view(message)
+            # if type(message) == DataFileUpdateEvent:
+            #     self.some_data_frame.update_tree_view(message)
             if type(message) == IPAddrListChangedEvent:
                 self.statusbar.set('IP Addr list updating...')
                 self.config_frame.update_ip_addr_list(message)
