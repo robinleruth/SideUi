@@ -9,7 +9,7 @@ import pandas as pd
 from queue import Queue
 from threading import Thread
 from tkinter import *
-from tkinter import ttk
+from tkinter.ttk import *
 from typing import List, Dict, Any, Type
 
 from pandas.errors import EmptyDataError
@@ -616,10 +616,10 @@ class PeerToPeerFrame(Frame):
 class SomeDataFrame(Frame):
     def __init__(self, parent):
         Frame.__init__(self, parent)
-        self.tree = ttk.Treeview(self)
+        self.tree = Treeview(self)
         self.tree.grid(row=0, column=0, sticky='nsew')
         self.tree.bind('<<TreeviewSelect>>', self.item_selected)
-        scrollbar = ttk.Scrollbar(self, orient=VERTICAL, command=self.tree.yview)
+        scrollbar = Scrollbar(self, orient=VERTICAL, command=self.tree.yview)
         self.tree.configure(yscroll=scrollbar.set)
         scrollbar.grid(row=0, column=1, sticky='ns')
 
@@ -646,7 +646,7 @@ class ConfigFrame(Frame):
     def __init__(self, parent, controller):
         Frame.__init__(self, parent)
         self.controller = controller
-        self.ip_addr_list_tree_view = ttk.Treeview(self)
+        self.ip_addr_list_tree_view = Treeview(self)
         self.ip_addr_list_tree_view['show'] = 'headings'
         self.ip_addr_list_tree_view.pack()
         self._update_ip_addr_list(config_ip_rows)
@@ -813,10 +813,10 @@ def popupmsg(msg):
 
     popup.wm_title("!")
 
-    label = ttk.Label(popup, text=msg, font=NORM_FONT)
+    label = Label(popup, text=msg, font=NORM_FONT)
     label.pack(side="top", fill="x", pady=10)
-    B1 = ttk.Button(popup, text="Okay", command=leavemini)
-    B1.pack()
+    b = Button(popup, text="Okay", command=leavemini)
+    b.pack()
 
     popup.mainloop()
 
