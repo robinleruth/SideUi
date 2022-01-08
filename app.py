@@ -499,6 +499,13 @@ class MainContent(Frame):
     def __init__(self, parent):
         Frame.__init__(self, parent)
         Label(self, text='Main content').pack()
+        self.container = VerticalScrolledFrame(self)
+        self.container.pack(expand=True, fill='both')
+
+    def add(self, message: str):
+        Label(self.container.interior, text=message).pack()
+        self.container.canvas.update_idletasks()
+        self.container.canvas.yview_moveto(1)
 
 
 class TV(Frame):
@@ -751,9 +758,9 @@ class Main(Frame):
         while not self.master.queue.empty():
             message = self.master.queue.get()
             if type(message) == str:
-                Label(self.main_content, text=message).pack()
+                self.main_content.add(message)
             if type(message) == StrFromUi:
-                Label(self.main_content, text=message.message).pack()
+                self.main_content.add(message.message)
             if type(message) == ServerCreatedEvent:
                 self.statusbar.set('Processing ServerCreatedEvent...')
                 Label(self.server_frame, text=message.message).pack()
