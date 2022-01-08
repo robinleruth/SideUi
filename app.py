@@ -769,11 +769,11 @@ class Main(Frame):
                 self.statusbar.set('Receiving message from peer')
                 m = 'FROM ' + message.server + ' -> ' + message.message
                 Label(self.server_frame, text=m).pack()
-                Label(self.main_content, text=m).pack()
+                self.main_content.add(m)
                 self.peer_to_peer.get_msg(message.server, message.message)
             if type(message) == FileUpdateEvent:
                 m = 'From file : ' + message.update
-                Label(self.main_content, text=m).pack()
+                self.main_content.add(m)
             # if type(message) == DataFileUpdateEvent:
             #     self.some_data_frame.update_tree_view(message)
             if type(message) == IPAddrListChangedEvent:
