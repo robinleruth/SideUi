@@ -127,13 +127,20 @@ class IPAddrListChangedEvent(FileUpdateEvent):
 class Worker(metaclass=abc.ABCMeta):
     def __init__(self, out_queues: List[Queue]):
         self.queues = out_queues
-        self.in_queue = asyncio.Queue()
+        self.in_queue = None
+        self.buffer_queue = Queue()
 
     async def tell(self, message):
-        await self.in_queue.put(message)
+        if self.in_queue is not None:
+            await self.in_queue.put(message)
+        else:
+            self.buffer_queue.put(message)
 
     async def start(self):
         print(f'Worker for {self.get_type().get_repr()} init')
+        self.in_queue = asyncio.Queue()
+        while not self.buffer_queue.empty():
+            await self.tell(self.buffer_queue.get())
         while True:
             message = await self.in_queue.get()
             print(f'{message} received in {self.get_type().get_repr()}')
@@ -360,10 +367,7 @@ async def init_workers():
     await asyncio.gather(*[w.start() for w in lst])
 
 
-dispatcher_queue = asyncio.Queue()
-
-
-async def populate_queue():
+async def populate_queue(dispatcher_queue):
     print("populate_queue")
     while True:
         if not ui_out_queue.empty():
@@ -373,7 +377,7 @@ async def populate_queue():
             await asyncio.sleep(0.5)
 
 
-async def dispatcher():
+async def dispatcher(dispatcher_queue):
     print('Dispatcher init')
     while True:
         message: Event = await dispatcher_queue.get()
@@ -389,9 +393,12 @@ def process_message_from_ui():
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
 
+    # dispatcher_queue = asyncio.Queue(loop=loop)
+    dispatcher_queue = asyncio.Queue()
+
     loop.create_task(init_workers())
-    loop.create_task(populate_queue())
-    loop.create_task(dispatcher())
+    loop.create_task(populate_queue(dispatcher_queue))
+    loop.create_task(dispatcher(dispatcher_queue))
 
     loop.run_forever()
 
