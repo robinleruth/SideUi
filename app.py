@@ -3,22 +3,24 @@ import asyncio
 import os
 import platform
 import subprocess
+import datetime as dt
 
-# import pandas as pd
+import pandas as pd
 from queue import Queue
 from threading import Thread
 from tkinter import *
 from tkinter.ttk import *
-from typing import List, Dict, Any, Type
+from typing import List, Dict, Any, Type, Tuple
 from tkinter.messagebox import showinfo
 
-# from pandas.errors import EmptyDataError
+from pandas.errors import EmptyDataError
 
 ui_queues: List[Queue] = []
 ui_out_queue = Queue()
 
 NORM_FONT = ("Helvetica", 10)
 TODO_FILE = r'A_todo_today.txt'
+DONE_FILE = r'done.txt'
 SOME_DATA_FILE = r'some_data.txt'
 IP_FILE = r'ip_addr_list.txt'
 
@@ -335,12 +337,60 @@ class TodoFileUpdate(FileUpdateEvent):
         return 'TODO FILE UPDATE'
 
 
+class DoneFileUpdate(FileUpdateEvent):
+    update: pd.DataFrame
+    new_update: Tuple[str, str]
+
+    def __init__(self, update, new_update) -> None:
+        super().__init__(update)
+        self.new_update = new_update
+
+    @staticmethod
+    def get_repr():
+        return 'DONE FILE UPDATE'
+
+
 class TodoFileSubscriber(FileSubscriber):
     def get_type(self) -> Type[FileUpdateEvent]:
         return TodoFileUpdate
 
     def get_file_name(self) -> str:
         return TODO_FILE
+
+
+class DoneFileSubscriber(FileSubscriber):
+    async def start(self):
+        if not os.path.exists(self.get_file_name()):
+            with open(self.get_file_name(), 'w') as f:
+                f.write("date,task\n")
+        return await super().start()
+
+    def get_type(self) -> Type[DoneFileUpdate]:
+        return DoneFileUpdate
+
+    def get_file_name(self) -> str:
+        return DONE_FILE
+
+    async def _process_message(self, message: DoneFileUpdate) -> DoneFileUpdate:
+        if message.new_update is not None:
+            with open(self.get_file_name(), 'a') as f:
+                d = message.new_update[0]
+                t = message.new_update[1]
+                f.write("{},{}\n".format(d, t))
+            return
+        return message
+
+    async def _get_update(self) -> Any:
+        try:
+            df = pd.read_csv(self.get_file_name())
+        except EmptyDataError:
+            print('No data in data file')
+        else:
+            if not df.equals(self.state):
+                self.state = df
+                now = dt.date.today().strftime('%Y-%m-%d')
+                df = df[df['date'].isin([now])]
+                return self.get_type()(df, None)
 
 
 # ================= SET UP =================
@@ -351,7 +401,8 @@ workers: List[Worker] = [
     MessageToPeerWorker(ui_queues),
     # DataFileSubscriber(ui_queues),
     IpAddrListFileSubscriber(ui_queues),
-    TodoFileSubscriber(ui_queues)
+    TodoFileSubscriber(ui_queues),
+    DoneFileSubscriber(ui_queues)
 ]
 workers_by_type: Dict[str, List[Worker]] = dict()
 config_ip_rows = []
@@ -467,6 +518,7 @@ class NavBar(Frame):
         # Radiobutton(self, text='Data', variable=self.var, value=5, command=self.switch).pack()
         Radiobutton(self, text='Config', variable=self.var, value=6, command=self.switch).pack()
         Radiobutton(self, text='Todo', variable=self.var, value=7, command=self.switch).pack()
+        Radiobutton(self, text='Done', variable=self.var, value=8, command=self.switch).pack()
         self.var.set(1)
 
         self.lookup = {
@@ -476,7 +528,8 @@ class NavBar(Frame):
             4: 'Peer to peer',
             # 5: 'Data',
             6: 'Config',
-            7: 'Todo'
+            7: 'Todo',
+            8: 'Done'
         }
 
     def switch(self):
@@ -709,6 +762,33 @@ class TodoFrame(Frame):
             Label(self.container.interior, text=update.strip()).pack()
 
 
+class DoneFrame(Frame):
+    def __init__(self, parent, controller):
+        Frame.__init__(self, parent)
+        self.controller = controller
+        grid = Frame(self)
+        grid.pack()
+        Label(grid, text='Task').grid(row=0, column=0)
+        self.msg = StringVar(master=self)
+        self.entry = Entry(grid, textvariable=self.msg)
+        self.entry.grid(row=0, column=1)
+        Button(self, text='Update', command=lambda: self._update()).pack()
+        self.container = VerticalScrolledFrame(self)
+        self.container.pack(expand=True, fill='x')
+
+    def update_dones(self, message: DoneFileUpdate):
+        for item in self.container.interior.winfo_children():
+            item.destroy()
+        for update in message.update['task'].values:
+            Label(self.container.interior, text=update.strip()).pack()
+
+    def _update(self):
+        now = dt.date.today().strftime('%Y-%m-%d')
+        task = self.msg.get()
+        self.msg.set('')
+        ui_out_queue.put(DoneFileUpdate(None, (now, task)))
+
+
 class Main(Frame):
     def __init__(self, parent):
         Frame.__init__(self, parent)
@@ -723,6 +803,7 @@ class Main(Frame):
         # self.some_data_frame = SomeDataFrame(container)
         self.config_frame = ConfigFrame(container, self)
         self.todo_frame = TodoFrame(container, self)
+        self.done_frame = DoneFrame(container, self)
 
         self.statusbar.pack(side='bottom', fill='x')
         # self.toolbar.pack(side='top', fill='x')
@@ -737,6 +818,7 @@ class Main(Frame):
         # self.some_data_frame.grid(row=0, column=0, sticky='nsew')
         self.config_frame.grid(row=0, column=0, sticky='nsew')
         self.todo_frame.grid(row=0, column=0, sticky='nsew')
+        self.done_frame.grid(row=0, column=0, sticky='nsew')
 
         menubar = Menu(container)
         filemenu = Menu(menubar, tearoff=0)
@@ -753,8 +835,8 @@ class Main(Frame):
         Tk.config(self.master, menu=menubar)
 
         self.frames = {}
-        for f in zip(('Main', 'Test', 'Server', 'Peer to peer', 'Config', 'Todo'),
-                     (self.main_content, self.tview, self.server_frame, self.peer_to_peer, self.config_frame, self.todo_frame)):
+        for f in zip(('Main', 'Test', 'Server', 'Peer to peer', 'Config', 'Todo', 'Done'),
+                     (self.main_content, self.tview, self.server_frame, self.peer_to_peer, self.config_frame, self.todo_frame, self.done_frame)):
             self.frames[f[0]] = f[1]
 
         self.switch_main('Main')
@@ -792,6 +874,10 @@ class Main(Frame):
                 self.statusbar.set('Todo file updating...')
                 self.todo_frame.update_todos(message)
                 self.statusbar.set('Todo file updated')
+            if type(message) == DoneFileUpdate:
+                self.statusbar.set('Done file updating...')
+                self.done_frame.update_dones(message)
+                self.statusbar.set('Done file updated')
         self.master.after(100, self.process_queue)
 
     def switch_main(self, value):
