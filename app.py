@@ -773,6 +773,7 @@ class DoneFrame(Frame):
         self.entry = Entry(grid, textvariable=self.msg)
         self.entry.grid(row=0, column=1)
         Button(self, text='Update', command=lambda: self._update()).pack()
+        Button(self, text="Open file", command=lambda: open_file(DONE_FILE)).pack()
         self.container = VerticalScrolledFrame(self)
         self.container.pack(expand=True, fill='x')
 
@@ -786,6 +787,7 @@ class DoneFrame(Frame):
         now = dt.date.today().strftime('%Y-%m-%d')
         task = self.msg.get()
         self.msg.set('')
+        self.entry.focus()
         ui_out_queue.put(DoneFileUpdate(None, (now, task)))
 
 
