@@ -407,6 +407,10 @@ class DoneFileSubscriber(FileSubscriber):
 
 
 class ClipboardListener(Worker):
+    def __init__(self, out_queues: List[Queue]):
+        super().__init__(out_queues)
+        self.state = None
+
     async def start(self):
         if not os.path.exists(CLIPBOARD_FILE):
             open(CLIPBOARD_FILE, 'w').close()
@@ -416,9 +420,11 @@ class ClipboardListener(Worker):
         return NewClipboardInfo
 
     async def _process_message(self, message) -> Any:
-        with open(CLIPBOARD_FILE, 'a') as f:
-            f.write(message.clipboard + '\n')
-        return message
+        if self.state != message.clipboard:
+            self.state = message.clipboard
+            with open(CLIPBOARD_FILE, 'a') as f:
+                f.write(message.clipboard + '\n')
+            return message
 
 
 # ================= SET UP =================
@@ -931,7 +937,7 @@ class App(Tk):
         super().__init__(*args, **kwargs)
         self.queue = Queue()
         ui_queues.append(self.queue)
-        self.geometry('300x300')
+        self.geometry('200x300')
         self.wm_title('Side')
         self.lift()
         self.attributes('-topmost', True)
@@ -992,5 +998,5 @@ if __name__ == '__main__':
     get_message_thread = Thread(target=process_message_from_ui)
     get_message_thread.daemon = True
     get_message_thread.start()
-    ui_out_queue.put(CreateServerEvent('8888'))
+    # ui_out_queue.put(CreateServerEvent('8888'))
     launch_ui()
