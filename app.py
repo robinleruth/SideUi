@@ -23,6 +23,7 @@ TODO_FILE = r'A_todo_today.txt'
 DONE_FILE = r'done.txt'
 SOME_DATA_FILE = r'some_data.txt'
 IP_FILE = r'ip_addr_list.txt'
+CLIPBOARD_FILE = r'clipboard.txt'
 
 
 # ================= UTIL =================
@@ -47,6 +48,15 @@ class Event(metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def get_repr():
         pass
+
+
+class NewClipboardInfo(Event):
+    def __init__(self, cp):
+        self.clipboard = cp
+
+    @staticmethod
+    def get_repr():
+        return 'NewClipboardInfo'
 
 
 class RandomSubscriberEvent(Event):
@@ -396,9 +406,25 @@ class DoneFileSubscriber(FileSubscriber):
                 return self.get_type()(df, None)
 
 
+class ClipboardListener(Worker):
+    async def start(self):
+        if not os.path.exists(CLIPBOARD_FILE):
+            open(CLIPBOARD_FILE, 'w').close()
+        return await super().start()
+
+    def get_type(self) -> Type[Event]:
+        return NewClipboardInfo
+
+    async def _process_message(self, message) -> Any:
+        with open(CLIPBOARD_FILE, 'a') as f:
+            f.write(message.clipboard + '\n')
+        return message
+
+
 # ================= SET UP =================
 
 workers: List[Worker] = [
+    ClipboardListener(ui_queues),
     StrFromUiWorker(ui_queues),
     ServerWorker(ui_queues),
     MessageToPeerWorker(ui_queues),
@@ -890,6 +916,8 @@ class Main(Frame):
                     self.navbar.pack_forget()
                 else:
                     self.navbar.pack(side='left', fill='y', after=self.statusbar)
+            if type(message) == NewClipboardInfo:
+                self.statusbar.set(message.clipboard)
         self.master.after(100, self.process_queue)
 
     def switch_main(self, value):
@@ -908,10 +936,28 @@ class App(Tk):
         self.lift()
         self.attributes('-topmost', True)
         self.bind('<Key>', self._key)
+        self.clipboard = None
+        self.init = False
+        self.after(1000, self.fetch_clipboard)
 
     def _key(self, event):
         if event.char.lower() == 't':
             self.queue.put(ToggleSideBarEvent())
+
+    def fetch_clipboard(self):
+        t = self._get_clipboard()
+        if t != self.clipboard:
+            self.clipboard = t
+            if self.init:
+                ui_out_queue.put(NewClipboardInfo(self.clipboard))
+        self.init = True
+        self.after(1000, self.fetch_clipboard)
+
+    def _get_clipboard(self):
+        try:
+            return self.clipboard_get()
+        except:
+            pass
 
 
 def launch_ui():
