@@ -38,6 +38,9 @@ def open_file(file_name):
 
 
 # ================= EVENT =================
+class ToggleSideBarEvent:
+    pass
+
 
 class Event(metaclass=abc.ABCMeta):
     @staticmethod
@@ -794,6 +797,7 @@ class DoneFrame(Frame):
 class Main(Frame):
     def __init__(self, parent):
         Frame.__init__(self, parent)
+        self.navbar_shown = True
         self.statusbar = StatusBar(self)
         # self.toolbar = ToolBar(self)
         self.navbar = NavBar(self)
@@ -880,6 +884,12 @@ class Main(Frame):
                 self.statusbar.set('Done file updating...')
                 self.done_frame.update_dones(message)
                 self.statusbar.set('Done file updated')
+            if type(message) == ToggleSideBarEvent:
+                self.navbar_shown = not self.navbar_shown
+                if not self.navbar_shown:
+                    self.navbar.pack_forget()
+                else:
+                    self.navbar.pack(side='left', fill='y', after=self.statusbar)
         self.master.after(100, self.process_queue)
 
     def switch_main(self, value):
@@ -897,6 +907,11 @@ class App(Tk):
         self.wm_title('Side')
         self.lift()
         self.attributes('-topmost', True)
+        self.bind('<Key>', self._key)
+
+    def _key(self, event):
+        if event.char.lower() == 't':
+            self.queue.put(ToggleSideBarEvent())
 
 
 def launch_ui():
