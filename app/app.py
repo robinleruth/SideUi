@@ -1,29 +1,27 @@
 import abc
 import asyncio
+import datetime as dt
 import os
 import platform
 import subprocess
-import datetime as dt
-
-import pandas as pd
 from queue import Queue
 from threading import Thread
 from tkinter import *
 from tkinter.ttk import *
 from typing import List, Dict, Any, Type, Tuple
-from tkinter.messagebox import showinfo
 
+import pandas as pd
 from pandas.errors import EmptyDataError
 
 ui_queues: List[Queue] = []
 ui_out_queue = Queue()
 
 NORM_FONT = ("Helvetica", 10)
-TODO_FILE = r'A_todo_today.txt'
-DONE_FILE = r'done.txt'
-SOME_DATA_FILE = r'some_data.txt'
-IP_FILE = r'ip_addr_list.txt'
-CLIPBOARD_FILE = r'clipboard.txt'
+TODO_FILE = r'../A_todo_today.txt'
+DONE_FILE = r'../done.txt'
+SOME_DATA_FILE = r'../some_data.txt'
+IP_FILE = r'../ip_addr_list.txt'
+CLIPBOARD_FILE = r'../clipboard.txt'
 
 
 # ================= UTIL =================
@@ -36,6 +34,13 @@ def open_file(file_name):
         os.startfile(file_name)
     else:  # linux variants
         subprocess.call(['gedit', file_name])
+
+
+def metaclass_resolver(*classes):
+    metaclass = tuple(set(type(cls) for cls in classes))
+    metaclass = metaclass[0] if len(metaclass)==1 \
+                else type("_".join(mcls.__name__ for mcls in metaclass), metaclass, {})   # class M_C
+    return metaclass("_".join(cls.__name__ for cls in classes), classes, {})
 
 
 # ================= EVENT =================
@@ -175,7 +180,30 @@ class Worker(metaclass=abc.ABCMeta):
         pass
 
 
-class Subscriber(Worker, metaclass=abc.ABCMeta):
+workers: List[Worker] = []
+
+
+def register_instance(inst):
+    global workers
+    workers.append(inst)
+
+
+class M_WorkerMeta(type):
+    def __new__(cls, name, base, attrs):
+        worker_cls = super().__new__(cls, name, base, attrs)
+        try:
+            w = worker_cls(ui_queues)
+            register_instance(w)
+        except Exception as e:
+            print('ERR Worker META, ', e)
+        return worker_cls
+
+
+class WorkerMeta(metaclass=M_WorkerMeta):
+    pass
+
+
+class Subscriber(Worker):
     async def _get_from_source(self):
         await asyncio.sleep(1)
         while True:
@@ -201,7 +229,7 @@ class Subscriber(Worker, metaclass=abc.ABCMeta):
         pass
 
 
-class FileSubscriber(Subscriber, metaclass=abc.ABCMeta):
+class FileSubscriber(Subscriber):
     def __init__(self, out_queues: List[Queue]):
         super().__init__(out_queues)
         self.state = None
@@ -265,7 +293,7 @@ class RandomSubscriber(Subscriber):
         return RandomSubscriberEvent
 
 
-class StrFromUiWorker(Worker):
+class StrFromUiWorker(metaclass_resolver(Worker, WorkerMeta)):
     def get_type(self) -> Type[Event]:
         return StrFromUi
 
@@ -273,7 +301,7 @@ class StrFromUiWorker(Worker):
         return message
 
 
-class ServerWorker(Worker):
+class ServerWorker(metaclass_resolver(Worker, WorkerMeta)):
     def get_type(self) -> Type[Event]:
         return CreateServerEvent
 
@@ -307,7 +335,7 @@ class ServerWorker(Worker):
         writer.close()
 
 
-class MessageToPeerWorker(Worker):
+class MessageToPeerWorker(metaclass_resolver(Worker, WorkerMeta)):
     def get_type(self) -> Type[Event]:
         return MessageToPeer
 
@@ -327,7 +355,7 @@ class MessageToPeerWorker(Worker):
         return StrFromUi('Message sent !')
 
 
-class IpAddrListFileSubscriber(FileSubscriber):
+class IpAddrListFileSubscriber(metaclass_resolver(FileSubscriber, WorkerMeta)):
     async def _get_update(self) -> Any:
         msg = await super()._get_update()
         if msg is not None:
@@ -363,7 +391,7 @@ class DoneFileUpdate(FileUpdateEvent):
         return 'DONE FILE UPDATE'
 
 
-class TodoFileSubscriber(FileSubscriber):
+class TodoFileSubscriber(metaclass_resolver(FileSubscriber, WorkerMeta)):
     def get_type(self) -> Type[FileUpdateEvent]:
         return TodoFileUpdate
 
@@ -371,7 +399,7 @@ class TodoFileSubscriber(FileSubscriber):
         return TODO_FILE
 
 
-class DoneFileSubscriber(FileSubscriber):
+class DoneFileSubscriber(metaclass_resolver(FileSubscriber, WorkerMeta)):
     async def start(self):
         if not os.path.exists(self.get_file_name()):
             with open(self.get_file_name(), 'w') as f:
@@ -406,7 +434,7 @@ class DoneFileSubscriber(FileSubscriber):
                 return self.get_type()(df, None)
 
 
-class ClipboardListener(Worker):
+class ClipboardListener(metaclass_resolver(Worker, WorkerMeta)):
     def __init__(self, out_queues: List[Queue]):
         super().__init__(out_queues)
         self.state = None
@@ -429,16 +457,16 @@ class ClipboardListener(Worker):
 
 # ================= SET UP =================
 
-workers: List[Worker] = [
-    ClipboardListener(ui_queues),
-    StrFromUiWorker(ui_queues),
-    ServerWorker(ui_queues),
-    MessageToPeerWorker(ui_queues),
-    # DataFileSubscriber(ui_queues),
-    IpAddrListFileSubscriber(ui_queues),
-    TodoFileSubscriber(ui_queues),
-    DoneFileSubscriber(ui_queues)
-]
+# workers: List[Worker] = [
+#     ClipboardListener(ui_queues),
+#     StrFromUiWorker(ui_queues),
+#     ServerWorker(ui_queues),
+#     MessageToPeerWorker(ui_queues),
+#     # DataFileSubscriber(ui_queues),
+#     IpAddrListFileSubscriber(ui_queues),
+#     TodoFileSubscriber(ui_queues),
+#     DoneFileSubscriber(ui_queues)
+# ]
 workers_by_type: Dict[str, List[Worker]] = dict()
 config_ip_rows = []
 
@@ -446,10 +474,13 @@ config_ip_rows = []
 async def init_workers():
     lst = []
     for w in workers:
-        lst.append(w)
-        if w.get_type() not in workers_by_type:
-            workers_by_type[w.get_type().get_repr()] = []
-        workers_by_type[w.get_type().get_repr()].append(w)
+        try:
+            if w.get_type() not in workers_by_type:
+                workers_by_type[w.get_type().get_repr()] = []
+            workers_by_type[w.get_type().get_repr()].append(w)
+            lst.append(w)
+        except AttributeError:
+            pass
     await asyncio.gather(*[w.start() for w in lst])
 
 
@@ -494,6 +525,49 @@ def get_all_files_subscribers() -> List[FileSubscriber]:
 
 
 # ================= UI =================
+
+
+frames_ctor = []
+lookup = {
+    1: 'Main',
+    2: 'Test',
+    3: 'Server',
+    4: 'Peer to peer',
+    # 5: 'Data',
+    6: 'Config',
+    7: 'Todo',
+    8: 'Done'
+}
+
+
+def register_frame(f):
+    global frames_ctor
+    frames_ctor.append(f)
+
+
+class FrameMeta(type):
+    n = 9
+
+    def __new__(cls, name, base, attrs):
+        c = super().__new__(cls, name, base, attrs)
+        n = getattr(c, 'get_name')()
+        if n is not None:
+            register_frame(c)
+            lookup[cls.n] = getattr(c, 'get_name')()
+            cls.n = cls.n + 1
+        return c
+
+
+class MyFrame(Frame, metaclass=FrameMeta):
+    def get_types(self) -> List[Type[Event]]:
+        pass
+
+    def process(self, message: Event):
+        pass
+
+    @staticmethod
+    def get_name():
+        pass
 
 
 class VerticalScrolledFrame(Frame):
@@ -541,45 +615,28 @@ class VerticalScrolledFrame(Frame):
 
 
 class NavBar(Frame):
-    def __init__(self, parent):
+    def __init__(self, parent, *args, **kwargs):
         Frame.__init__(self, parent)
         self.parent = parent
         Label(self, text='=====').pack()
         self.var = IntVar(master=self)
-        Radiobutton(self, text='Main', variable=self.var, value=1, command=self.switch).pack()
-        Radiobutton(self, text='Test', variable=self.var, value=2, command=self.switch).pack()
-        Radiobutton(self, text='Server', variable=self.var, value=3, command=self.switch).pack()
-        Radiobutton(self, text='Peer to peer', variable=self.var, value=4, command=self.switch).pack()
-        # Radiobutton(self, text='Data', variable=self.var, value=5, command=self.switch).pack()
-        Radiobutton(self, text='Config', variable=self.var, value=6, command=self.switch).pack()
-        Radiobutton(self, text='Todo', variable=self.var, value=7, command=self.switch).pack()
-        Radiobutton(self, text='Done', variable=self.var, value=8, command=self.switch).pack()
+        for k in lookup:
+            Radiobutton(self, text=lookup[k], variable=self.var, value=k, command=self.switch).pack()
         self.var.set(1)
-
-        self.lookup = {
-            1: 'Main',
-            2: 'Test',
-            3: 'Server',
-            4: 'Peer to peer',
-            # 5: 'Data',
-            6: 'Config',
-            7: 'Todo',
-            8: 'Done'
-        }
 
     def switch(self):
         # self.parent.statusbar.set(self.var.get())
-        self.parent.switch_main(self.lookup[self.var.get()])
+        self.parent.switch_main(lookup[self.var.get()])
 
 
 class ToolBar(Frame):
-    def __init__(self, parent):
+    def __init__(self, parent, *args, **kwargs):
         Frame.__init__(self, parent)
         Label(self, text='Toolbar').pack()
 
 
 class StatusBar(Frame):
-    def __init__(self, parent):
+    def __init__(self, parent, *args, **kwargs):
         Frame.__init__(self, parent)
         self.var = StringVar(master=self, value='Launching...')
         self.label = Label(self, textvariable=self.var)
@@ -591,7 +648,7 @@ class StatusBar(Frame):
 
 
 class MainContent(Frame):
-    def __init__(self, parent):
+    def __init__(self, parent, *args, **kwargs):
         Frame.__init__(self, parent)
         Label(self, text='Main content').pack()
         self.container = VerticalScrolledFrame(self)
@@ -604,7 +661,7 @@ class MainContent(Frame):
 
 
 class TV(Frame):
-    def __init__(self, parent):
+    def __init__(self, parent, *args, **kwargs):
         Frame.__init__(self, parent)
         Label(self, text='Test').pack()
         self.entry = Entry(self)
@@ -617,7 +674,7 @@ class TV(Frame):
 
 
 class ServerFrame(Frame):
-    def __init__(self, parent, controller):
+    def __init__(self, parent, controller, *args, **kwargs):
         Frame.__init__(self, parent)
         self.controller = controller
         Label(self, text='Choose port').pack()
@@ -636,7 +693,7 @@ messages_by_peers: Dict[str, List[str]] = {}
 
 
 class PeerToPeerFrame(Frame):
-    def __init__(self, parent, controller):
+    def __init__(self, parent, controller, *args, **kwargs):
         self.parent = parent
         self.controller = controller
         Frame.__init__(self, parent)
@@ -756,7 +813,7 @@ class PeerToPeerFrame(Frame):
 
 
 class ConfigFrame(Frame):
-    def __init__(self, parent, controller):
+    def __init__(self, parent, controller, *args, **kwargs):
         Frame.__init__(self, parent)
         self.controller = controller
         Button(self, text="Open file", command=lambda: open_file(IP_FILE)).pack()
@@ -783,7 +840,7 @@ class ConfigFrame(Frame):
 
 
 class TodoFrame(Frame):
-    def __init__(self, parent, controller):
+    def __init__(self, parent, controller, *args, **kwargs):
         Frame.__init__(self, parent)
         self.controller = controller
         self.container = VerticalScrolledFrame(self)
@@ -798,7 +855,7 @@ class TodoFrame(Frame):
 
 
 class DoneFrame(Frame):
-    def __init__(self, parent, controller):
+    def __init__(self, parent, controller, *args, **kwargs):
         Frame.__init__(self, parent)
         self.controller = controller
         grid = Frame(self)
@@ -827,7 +884,7 @@ class DoneFrame(Frame):
 
 
 class Main(Frame):
-    def __init__(self, parent):
+    def __init__(self, parent, *args, **kwargs):
         Frame.__init__(self, parent)
         self.navbar_shown = True
         self.statusbar = StatusBar(self)
@@ -857,6 +914,13 @@ class Main(Frame):
         self.config_frame.grid(row=0, column=0, sticky='nsew')
         self.todo_frame.grid(row=0, column=0, sticky='nsew')
         self.done_frame.grid(row=0, column=0, sticky='nsew')
+        self.load_plugins()
+        self.my_frames = []
+
+        for f_ctor in frames_ctor:
+            f_inst = f_ctor(container, self)
+            f_inst.grid(row=0, column=0, sticky='nsew')
+            self.my_frames.append(f_inst)
 
         menubar = Menu(container)
         filemenu = Menu(menubar, tearoff=0)
@@ -873,8 +937,9 @@ class Main(Frame):
         Tk.config(self.master, menu=menubar)
 
         self.frames = {}
-        for f in zip(('Main', 'Test', 'Server', 'Peer to peer', 'Config', 'Todo', 'Done'),
-                     (self.main_content, self.tview, self.server_frame, self.peer_to_peer, self.config_frame, self.todo_frame, self.done_frame)):
+        lframes = [self.main_content, self.tview, self.server_frame, self.peer_to_peer, self.config_frame, self.todo_frame, self.done_frame]
+        lframes.extend(self.my_frames)
+        for f in zip(lookup.values(), lframes):
             self.frames[f[0]] = f[1]
 
         self.switch_main('Main')
@@ -924,12 +989,21 @@ class Main(Frame):
                     self.navbar.pack(side='left', fill='y', after=self.statusbar)
             if type(message) == NewClipboardInfo:
                 self.statusbar.set(message.clipboard)
+            for f in self.my_frames:
+                self.process(f, message)
         self.master.after(100, self.process_queue)
 
     def switch_main(self, value):
         frame = self.frames.get(value)
         if frame is not None:
             frame.tkraise()
+
+    def process(self, f: MyFrame, e: Event):
+        if type(e) in f.get_types():
+            f.process(e)
+
+    def load_plugins(self):
+        pass
 
 
 class App(Tk):
