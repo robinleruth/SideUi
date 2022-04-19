@@ -17,11 +17,11 @@ ui_queues: List[Queue] = []
 ui_out_queue = Queue()
 
 NORM_FONT = ("Helvetica", 10)
-TODO_FILE = r'../A_todo_today.txt'
-DONE_FILE = r'../done.txt'
-SOME_DATA_FILE = r'../some_data.txt'
-IP_FILE = r'../ip_addr_list.txt'
-CLIPBOARD_FILE = r'../clipboard.txt'
+TODO_FILE = r'./A_todo_today.txt'
+DONE_FILE = r'./done.txt'
+SOME_DATA_FILE = r'./some_data.txt'
+IP_FILE = r'./ip_addr_list.txt'
+CLIPBOARD_FILE = r'./clipboard.txt'
 
 
 # ================= UTIL =================
