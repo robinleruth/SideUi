@@ -2,8 +2,11 @@ import abc
 import asyncio
 import datetime as dt
 import os
+import pdb
 import platform
 import subprocess
+import sys
+import traceback
 from queue import Queue
 from threading import Thread
 from tkinter import *
@@ -38,8 +41,8 @@ def open_file(file_name):
 
 def metaclass_resolver(*classes):
     metaclass = tuple(set(type(cls) for cls in classes))
-    metaclass = metaclass[0] if len(metaclass)==1 \
-                else type("_".join(mcls.__name__ for mcls in metaclass), metaclass, {})   # class M_C
+    metaclass = metaclass[0] if len(metaclass) == 1 \
+        else type("_".join(mcls.__name__ for mcls in metaclass), metaclass, {})  # class M_C
     return metaclass("_".join(cls.__name__ for cls in classes), classes, {})
 
 
@@ -125,6 +128,8 @@ class FileUpdateEvent(Event):
     @staticmethod
     def get_repr():
         return 'FILE UPDATE'
+
+
 #
 #
 # class DataFileUpdateEvent(FileUpdateEvent):
@@ -258,6 +263,8 @@ class FileSubscriber(Subscriber):
     @abc.abstractmethod
     def get_file_name(self) -> str:
         pass
+
+
 #
 #
 # class DataFileSubscriber(FileSubscriber):
@@ -577,6 +584,7 @@ class VerticalScrolledFrame(Frame):
     * This frame only allows vertical scrolling
 
     """
+
     def __init__(self, parent, *args, **kw):
         Frame.__init__(self, parent, *args, **kw)
 
@@ -584,7 +592,7 @@ class VerticalScrolledFrame(Frame):
         self.vscrollbar = vscrollbar = Scrollbar(self, orient=VERTICAL)
         vscrollbar.pack(fill=Y, side=RIGHT, expand=FALSE)
         self.canvas = canvas = Canvas(self, bd=0, highlightthickness=0,
-                        yscrollcommand=vscrollbar.set)
+                                      yscrollcommand=vscrollbar.set)
         canvas.pack(side=LEFT, fill=BOTH, expand=TRUE)
         vscrollbar.config(command=canvas.yview)
 
@@ -605,12 +613,14 @@ class VerticalScrolledFrame(Frame):
             if interior.winfo_reqwidth() != canvas.winfo_width():
                 # update the canvas's width to fit the inner frame
                 canvas.config(width=interior.winfo_reqwidth())
+
         interior.bind('<Configure>', _configure_interior)
 
         def _configure_canvas(event):
             if interior.winfo_reqwidth() != canvas.winfo_width():
                 # update the inner frame's width to fill the canvas
                 canvas.itemconfigure(interior_id, width=canvas.winfo_width())
+
         canvas.bind('<Configure>', _configure_canvas)
 
 
@@ -725,7 +735,8 @@ class PeerToPeerFrame(Frame):
                 f = VerticalScrolledFrame(self.container)
                 self.messages_thread_by_addr[addr] = f
                 f.grid(row=0, column=0, sticky='nsew')
-                Button(self.menubar, textvariable=self.name_variable_by_addr[addr], command=lambda x=addr: self.switch(x)).pack(side=LEFT)
+                Button(self.menubar, textvariable=self.name_variable_by_addr[addr],
+                       command=lambda x=addr: self.switch(x)).pack(side=LEFT)
             messages = messages_by_peers[addr]
             for message in messages:
                 Label(self.messages_thread_by_addr[addr].interior, text=message).pack()
@@ -755,7 +766,8 @@ class PeerToPeerFrame(Frame):
             f = VerticalScrolledFrame(self.container)
             self.messages_thread_by_addr[addr] = f
             f.grid(row=0, column=0, sticky='nsew')
-            Button(self.menubar, textvariable=self.name_variable_by_addr[addr], command=lambda x=addr: self.switch(x)).pack(side=LEFT)
+            Button(self.menubar, textvariable=self.name_variable_by_addr[addr],
+                   command=lambda x=addr: self.switch(x)).pack(side=LEFT)
             messages_by_peers[addr] = []
         f = self.messages_thread_by_addr[addr]
         if port is not None:
@@ -777,6 +789,8 @@ class PeerToPeerFrame(Frame):
             if ip not in self.name_variable_by_addr:
                 self.get_msg(ip, '')
             self.name_variable_by_addr[ip].set(d[ip])
+
+
 #
 #
 # class SomeDataFrame(Frame):
@@ -937,7 +951,8 @@ class Main(Frame):
         Tk.config(self.master, menu=menubar)
 
         self.frames = {}
-        lframes = [self.main_content, self.tview, self.server_frame, self.peer_to_peer, self.config_frame, self.todo_frame, self.done_frame]
+        lframes = [self.main_content, self.tview, self.server_frame, self.peer_to_peer, self.config_frame,
+                   self.todo_frame, self.done_frame]
         lframes.extend(self.my_frames)
         for f in zip(lookup.values(), lframes):
             self.frames[f[0]] = f[1]
@@ -947,51 +962,57 @@ class Main(Frame):
         self.master.after(100, self.process_queue)
 
     def process_queue(self):
-        while not self.master.queue.empty():
-            message = self.master.queue.get()
-            if type(message) == str:
-                self.main_content.add(message)
-            if type(message) == StrFromUi:
-                self.main_content.add(message.message)
-            if type(message) == ServerCreatedEvent:
-                self.statusbar.set('Processing ServerCreatedEvent...')
-                Label(self.server_frame, text=message.message).pack()
-                self.statusbar.set('ServerCreatedEvent processed')
-            if type(message) == MessageFromPeer:
-                self.statusbar.set('Receiving message from peer')
-                m = 'FROM ' + message.server + ' -> ' + message.message
-                Label(self.server_frame, text=m).pack()
-                self.main_content.add(m)
-                self.peer_to_peer.get_msg(message.server, message.message)
-            if type(message) == FileUpdateEvent:
-                m = 'From file : ' + message.update
-                self.main_content.add(m)
-            # if type(message) == DataFileUpdateEvent:
-            #     self.some_data_frame.update_tree_view(message)
-            if type(message) == IPAddrListChangedEvent:
-                self.statusbar.set('IP Addr list updating...')
-                self.config_frame.update_ip_addr_list(message)
-                self.peer_to_peer.update_button_names(message)
-                self.statusbar.set('IP Addr list changed')
-            if type(message) == TodoFileUpdate:
-                self.statusbar.set('Todo file updating...')
-                self.todo_frame.update_todos(message)
-                self.statusbar.set('Todo file updated')
-            if type(message) == DoneFileUpdate:
-                self.statusbar.set('Done file updating...')
-                self.done_frame.update_dones(message)
-                self.statusbar.set('Done file updated')
-            if type(message) == ToggleSideBarEvent:
-                self.navbar_shown = not self.navbar_shown
-                if not self.navbar_shown:
-                    self.navbar.pack_forget()
-                else:
-                    self.navbar.pack(side='left', fill='y', after=self.statusbar)
-            if type(message) == NewClipboardInfo:
-                self.statusbar.set(message.clipboard)
-            for f in self.my_frames:
-                self.process(f, message)
-        self.master.after(100, self.process_queue)
+        try:
+            while not self.master.queue.empty():
+                message = self.master.queue.get()
+                if type(message) == str:
+                    self.main_content.add(message)
+                if type(message) == StrFromUi:
+                    self.main_content.add(message.message)
+                if type(message) == ServerCreatedEvent:
+                    self.statusbar.set('Processing ServerCreatedEvent...')
+                    Label(self.server_frame, text=message.message).pack()
+                    self.statusbar.set('ServerCreatedEvent processed')
+                if type(message) == MessageFromPeer:
+                    self.statusbar.set('Receiving message from peer')
+                    m = 'FROM ' + message.server + ' -> ' + message.message
+                    Label(self.server_frame, text=m).pack()
+                    self.main_content.add(m)
+                    self.peer_to_peer.get_msg(message.server, message.message)
+                if type(message) == FileUpdateEvent:
+                    m = 'From file : ' + message.update
+                    self.main_content.add(m)
+                # if type(message) == DataFileUpdateEvent:
+                #     self.some_data_frame.update_tree_view(message)
+                if type(message) == IPAddrListChangedEvent:
+                    self.statusbar.set('IP Addr list updating...')
+                    self.config_frame.update_ip_addr_list(message)
+                    self.peer_to_peer.update_button_names(message)
+                    self.statusbar.set('IP Addr list changed')
+                if type(message) == TodoFileUpdate:
+                    self.statusbar.set('Todo file updating...')
+                    self.todo_frame.update_todos(message)
+                    self.statusbar.set('Todo file updated')
+                if type(message) == DoneFileUpdate:
+                    self.statusbar.set('Done file updating...')
+                    self.done_frame.update_dones(message)
+                    self.statusbar.set('Done file updated')
+                if type(message) == ToggleSideBarEvent:
+                    self.navbar_shown = not self.navbar_shown
+                    if not self.navbar_shown:
+                        self.navbar.pack_forget()
+                    else:
+                        self.navbar.pack(side='left', fill='y', after=self.statusbar)
+                if type(message) == NewClipboardInfo:
+                    self.statusbar.set(message.clipboard)
+                for f in self.my_frames:
+                    self.process(f, message)
+        except Exception:
+            extype, val, tb = sys.exc_info()
+            traceback.print_exc()
+            pdb.post_mortem(tb)
+        finally:
+            self.master.after(100, self.process_queue)
 
     def switch_main(self, value):
         frame = self.frames.get(value)
@@ -1015,14 +1036,13 @@ class App(Tk):
         self.wm_title('Side')
         self.lift()
         self.attributes('-topmost', True)
-        self.bind('<Key>', self._key)
+        self.bind('<Control-t>', self._key)
         self.clipboard = None
         self.init = False
         self.after(1000, self.fetch_clipboard)
 
     def _key(self, event):
-        if event.char.lower() == 't':
-            self.queue.put(ToggleSideBarEvent())
+        self.queue.put(ToggleSideBarEvent())
 
     def fetch_clipboard(self):
         t = self._get_clipboard()
