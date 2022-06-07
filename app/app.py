@@ -1037,12 +1037,17 @@ class App(Tk):
         self.lift()
         self.attributes('-topmost', True)
         self.bind('<Control-t>', self._key)
+        self.bind('<Escape>', self._iconify)
         self.clipboard = None
         self.init = False
         self.after(1000, self.fetch_clipboard)
 
     def _key(self, event):
         self.queue.put(ToggleSideBarEvent())
+
+    def _iconify(self, event):
+        print('icon')
+        self.iconify()
 
     def fetch_clipboard(self):
         t = self._get_clipboard()
