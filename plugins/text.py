@@ -31,7 +31,6 @@ class F(MyFrame):
         return 'T'
 
     def save(self):
-        print('Saving')
         with open(FILE, 'w') as f:
             f.write(self.t.get('1.0', 'end'))
         self.controller.master.after(4000, self.save)
