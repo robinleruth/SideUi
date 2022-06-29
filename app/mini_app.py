@@ -52,7 +52,7 @@ class Event(metaclass=abc.ABCMeta):
 
 class NewClipboardInfo(Event):
     def __init__(self, cp):
-        self.cp = cp
+        self.clipboard = cp
 
     @staticmethod
     def get_repr():
