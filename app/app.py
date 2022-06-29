@@ -36,7 +36,7 @@ def open_file(file_name):
     elif platform.system() == 'Windows':  # Windows
         os.startfile(file_name)
     else:  # linux variants
-        subprocess.call(['gedit', file_name])
+        subprocess.call(['gnome-terminal', '--', 'vim', file_name])
 
 
 def metaclass_resolver(*classes):
@@ -1061,7 +1061,7 @@ class App(Tk):
     def _get_clipboard(self):
         try:
             return self.clipboard_get()
-        except:
+        except Exception as e:
             pass
 
 

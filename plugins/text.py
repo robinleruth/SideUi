@@ -34,7 +34,6 @@ class F(MyFrame):
         print('Saving')
         with open(FILE, 'w') as f:
             f.write(self.t.get('1.0', 'end'))
-        ui_out_queue.put(NewClipboardInfo('File created : ' + FILE))
         self.controller.master.after(4000, self.save)
 
     def load(self):
