@@ -2,7 +2,7 @@ from tkinter import *
 from tkinter.ttk import *
 from typing import List, Type, Any
 
-from app import Event, Worker, WorkerMeta, MyFrame, ui_out_queue, VerticalScrolledFrame, metaclass_resolver
+from app import *
 
 
 class E(Event):
@@ -22,7 +22,7 @@ class W(metaclass_resolver(Worker, WorkerMeta)):
         return message
 
 
-class A(MyFrame):
+class F(MyFrame):
     def __init__(self, parent, controller):
         Frame.__init__(self, parent)
         self.parent = parent
@@ -43,3 +43,11 @@ class A(MyFrame):
     @staticmethod
     def get_name():
         return 'A'
+
+
+if __name__ == '__main__':
+    root = Tk()
+    m = Frame(root)
+    m.pack()
+    F(m, m).pack()
+    root.mainloop()
