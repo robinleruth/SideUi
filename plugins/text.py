@@ -38,7 +38,7 @@ class F(MyFrame):
     def load(self):
         if os.path.exists(FILE):
             with open(FILE, 'r') as f:
-                self.t.insert('1.0', '\n'.join(f.readlines()))
+                self.t.insert('1.0', ''.join(f.readlines()))
         self.f.pack()
         self.b.pack_forget()
         self.controller.master.after(4000, self.save)
