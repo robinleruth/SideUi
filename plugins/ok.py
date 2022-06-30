@@ -1,6 +1,6 @@
 from tkinter import *
 from tkinter.ttk import *
-from typing import List, Type, Any
+from typing import *
 
 from app import *
 
