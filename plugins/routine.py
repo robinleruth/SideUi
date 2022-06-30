@@ -1,8 +1,10 @@
-import os
 import datetime as dt
+import os
 from tkinter import *
 from tkinter.ttk import *
 from typing import List, Type, Any
+
+import pandas as pd
 
 from app import *
 
@@ -24,6 +26,12 @@ class W(metaclass_resolver(Worker, WorkerMeta)):
         return E
 
     async def _process_message(self, message: E) -> Any:
+        if not os.path.exists(ROUTINE_CHECK):
+            with open(ROUTINE_CHECK, 'w') as f:
+                f.write("date,item\n")
+        with open(ROUTINE_CHECK, 'a') as f:
+            now = dt.date.today()
+            f.write(f"{now},{message.m}\n")
         return message
 
 
@@ -37,10 +45,10 @@ class F(MyFrame):
         self.vf = VerticalScrolledFrame(self)
 
     def get_types(self) -> List[Type[Event]]:
-        return []
+        return [E]
 
     def process(self, message: E):
-        pass
+        print(f"{message.m} done")
 
     @staticmethod
     def get_name():
@@ -52,6 +60,12 @@ class F(MyFrame):
         button_by_name = {}
         if not os.path.exists(ROUTINE_FILE):
             return
+        already_done = set()
+        if os.path.exists(ROUTINE_CHECK):
+            df = pd.read_csv(ROUTINE_CHECK)
+            now = dt.date.today()
+            df = df[df['date'].isin([str(now)])]
+            already_done = set(df['item'].values)
         with open(ROUTINE_FILE, 'r') as f:
             for line in f:
                 if line == '\n':
@@ -59,15 +73,19 @@ class F(MyFrame):
                     Separator(self.vf.interior, orient=HORIZONTAL).pack(expand=True, fill='both')
                     frame = Frame(self.vf.interior)
                 else:
+                    l = line.strip()
+                    if l in already_done:
+                        continue
+
                     def out(d):
-                        l = line.strip()
+                        _l = l
 
                         def inner(*args, **kwargs):
-                            d[l].pack_forget()
+                            ui_out_queue.put(E(_l))
+                            d[_l].pack_forget()
 
                         return inner
 
-                    l = line.strip()
                     b = Button(frame, text=l, command=out(button_by_name))
                     button_by_name[l] = b
                     b.pack(expand=True, fill='both')
