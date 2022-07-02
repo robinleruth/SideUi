@@ -19,6 +19,7 @@ class F(MyFrame):
         self.f = Frame(self)
         self.t = Text(self.f)
         self.t.pack()
+        self.state = None
 
     def get_types(self) -> List[Type[Event]]:
         return []
@@ -31,8 +32,12 @@ class F(MyFrame):
         return 'T'
 
     def save(self):
-        with open(FILE, 'w') as f:
-            f.write(self.t.get('1.0', 'end'))
+        content = self.t.get('1.0', 'end')
+        if content != self.state:
+            print('Saving')
+            self.state = content
+            with open(FILE, 'w') as f:
+                f.write(content)
         self.controller.master.after(4000, self.save)
 
     def load(self):

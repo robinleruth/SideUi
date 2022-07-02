@@ -19,7 +19,6 @@ import numpy as np
 
 style.use('ggplot')
 
-f = plt.figure()
 REFRESH_RATE = 1000
 DAT_COUNTER = 9000
 
@@ -58,6 +57,7 @@ class F(MyFrame):
         Frame.__init__(self, parent)
         self.parent = parent
         self.controller = controller
+        f = plt.figure()
         now = dt.datetime.now()
         self.quotes: List[Quote] = []
         self.ani = animation.FuncAnimation(f, animate, interval=REFRESH_RATE, fargs=(self,))
